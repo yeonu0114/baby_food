@@ -19,6 +19,9 @@ jobs:
         with:
           channel: 'stable'
 
+      - name: Configure Web Platform
+        run: flutter create . --platforms web
+
       - name: Install dependencies
         run: flutter pub get
 
