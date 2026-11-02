@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   runApp(const BabyFoodApp());
@@ -25,12 +27,12 @@ class BabyFoodApp extends StatelessWidget {
   }
 }
 
-/// 1. 끼니 차수 정의 및 전용 색상 테마
+/// 1. 끼니 차수 정의 및 색상
 enum MealType {
-  first('1끼', Color(0xFFFF7A59), Color(0xFFFFEFEB)),   // 주황/코랄
-  second('2끼', Color(0xFF2E7D32), Color(0xFFE8F5E9)),  // 초록
-  third('3끼', Color(0xFF5E35B1), Color(0xFFEDE7F6)),   // 보라
-  snack('간식', Color(0xFFF57F17), Color(0xFFFFFDE7));  // 앰버/노랑
+  first('1끼', Color(0xFFFF7A59), Color(0xFFFFEFEB)),
+  second('2끼', Color(0xFF2E7D32), Color(0xFFE8F5E9)),
+  third('3끼', Color(0xFF5E35B1), Color(0xFFEDE7F6)),
+  snack('간식', Color(0xFFF57F17), Color(0xFFFFFDE7));
 
   final String label;
   final Color primaryColor;
@@ -59,6 +61,13 @@ enum FoodCategory {
   final Color textColor;
 
   const FoodCategory(this.label, this.bgColor, this.textColor);
+
+  static FoodCategory fromLabel(String label) {
+    return FoodCategory.values.firstWhere(
+      (c) => c.label == label,
+      orElse: () => FoodCategory.etc,
+    );
+  }
 }
 
 /// 3. 큐브 데이터 모델
@@ -101,6 +110,26 @@ class CubeItem {
     if (diff <= 2) return const Color(0xFFFB8C00);
     return const Color(0xFF43A047);
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'category': category.label,
+        'unitWeight': unitWeight,
+        'quantity': quantity,
+        'madeDate': madeDate.toIso8601String(),
+        'expireDate': expireDate.toIso8601String(),
+      };
+
+  factory CubeItem.fromJson(Map<String, dynamic> json) => CubeItem(
+        id: json['id'],
+        name: json['name'],
+        category: FoodCategory.fromLabel(json['category']),
+        unitWeight: json['unitWeight'],
+        quantity: json['quantity'],
+        madeDate: DateTime.parse(json['madeDate']),
+        expireDate: DateTime.parse(json['expireDate']),
+      );
 }
 
 /// 4. 식단 기록 모델
@@ -124,6 +153,28 @@ class MealLog {
     required this.reaction,
     required this.isPlanned,
   });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'mealType': mealType.label,
+        'time': time.toIso8601String(),
+        'ingredients': ingredients,
+        'cubeUsage': cubeUsage,
+        'totalGrams': totalGrams,
+        'reaction': reaction,
+        'isPlanned': isPlanned,
+      };
+
+  factory MealLog.fromJson(Map<String, dynamic> json) => MealLog(
+        id: json['id'],
+        mealType: MealType.fromLabel(json['mealType']),
+        time: DateTime.parse(json['time']),
+        ingredients: List<String>.from(json['ingredients']),
+        cubeUsage: Map<String, int>.from(json['cubeUsage'] ?? {}),
+        totalGrams: json['totalGrams'],
+        reaction: json['reaction'],
+        isPlanned: json['isPlanned'] ?? false,
+      );
 }
 
 /// 5. 메인 네비게이션 컨테이너
@@ -136,84 +187,180 @@ class MainNavigationScreen extends StatefulWidget {
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentTabIndex = 0;
+  bool _isLoading = true;
 
-  final List<CubeItem> _cubes = [
-    CubeItem(
-      id: '1',
-      name: '소고기 안심',
-      category: FoodCategory.meat,
-      unitWeight: 10,
-      quantity: 2,
-      madeDate: DateTime.now().subtract(const Duration(days: 5)),
-      expireDate: DateTime.now().add(const Duration(days: 3)),
-    ),
-    CubeItem(
-      id: '2',
-      name: '오트밀쌀죽',
-      category: FoodCategory.grain,
-      unitWeight: 30,
-      quantity: 5,
-      madeDate: DateTime.now().subtract(const Duration(days: 2)),
-      expireDate: DateTime.now().add(const Duration(days: 5)),
-    ),
-    CubeItem(
-      id: '3',
-      name: '단호박',
-      category: FoodCategory.vegetable,
-      unitWeight: 15,
-      quantity: 1,
-      madeDate: DateTime.now().subtract(const Duration(days: 8)),
-      expireDate: DateTime.now().subtract(const Duration(days: 1)),
-    ),
-    CubeItem(
-      id: '4',
-      name: '브로콜리',
-      category: FoodCategory.vegetable,
-      unitWeight: 10,
-      quantity: 0,
-      madeDate: DateTime.now().subtract(const Duration(days: 6)),
-      expireDate: DateTime.now().add(const Duration(days: 1)),
-    ),
-  ];
+  List<CubeItem> _cubes = [];
+  List<MealLog> _mealLogs = [];
 
-  late final List<MealLog> _mealLogs;
+  // 아기 기본 정보 (생년월일, 이유식 시작일)
+  DateTime? _birthDate;
+  DateTime? _weaningStartDate;
 
   @override
   void initState() {
     super.initState();
-    final now = DateTime.now();
-    _mealLogs = [
-      MealLog(
-        id: '1',
-        mealType: MealType.first,
-        time: DateTime(now.year, now.month, now.day, 9, 30),
-        ingredients: ['오트밀쌀죽 30g (1개)', '소고기 안심 10g (1개)'],
-        cubeUsage: {'1': 1, '2': 1},
-        totalGrams: 40,
-        reaction: '완식, 피부 정상, 황금변',
-        isPlanned: false,
-      ),
-      MealLog(
-        id: '2',
-        mealType: MealType.second,
-        time: DateTime(now.year, now.month, now.day - 1, 13, 0),
-        ingredients: ['오트밀쌀죽 30g (1개)', '단호박 15g (1개)'],
-        cubeUsage: {'2': 1, '3': 1},
-        totalGrams: 45,
-        reaction: '완식, 단호박 선호도 높음',
-        isPlanned: false,
-      ),
-      MealLog(
-        id: '3',
-        mealType: MealType.first,
-        time: DateTime(now.year, now.month, now.day + 1, 10, 0),
-        ingredients: ['오트밀쌀죽 30g (1개)', '소고기 안심 10g (1개)'],
-        cubeUsage: {'1': 1, '2': 1},
-        totalGrams: 40,
-        reaction: '[식단 계획] 내일 오전 진행 예정',
-        isPlanned: true,
-      ),
-    ];
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final cubesString = prefs.getString('cubes_data');
+    final mealsString = prefs.getString('meals_data');
+    final birthString = prefs.getString('baby_birth_date');
+    final weaningString = prefs.getString('weaning_start_date');
+
+    if (cubesString != null) {
+      final List decoded = jsonDecode(cubesString);
+      _cubes = decoded.map((item) => CubeItem.fromJson(item)).toList();
+    } else {
+      final now = DateTime.now();
+      _cubes = [
+        CubeItem(
+          id: '1',
+          name: '소고기 안심',
+          category: FoodCategory.meat,
+          unitWeight: 10,
+          quantity: 2,
+          madeDate: now.subtract(const Duration(days: 4)),
+          expireDate: now.add(const Duration(days: 3)),
+        ),
+        CubeItem(
+          id: '2',
+          name: '오트밀쌀죽',
+          category: FoodCategory.grain,
+          unitWeight: 30,
+          quantity: 5,
+          madeDate: now.subtract(const Duration(days: 2)),
+          expireDate: now.add(const Duration(days: 5)),
+        ),
+      ];
+    }
+
+    if (mealsString != null) {
+      final List decoded = jsonDecode(mealsString);
+      _mealLogs = decoded.map((item) => MealLog.fromJson(item)).toList();
+    } else {
+      _mealLogs = [];
+    }
+
+    if (birthString != null) {
+      _birthDate = DateTime.parse(birthString);
+    } else {
+      // 기본 예시 (약 6개월 전)
+      _birthDate = DateTime.now().subtract(const Duration(days: 180));
+    }
+
+    if (weaningString != null) {
+      _weaningStartDate = DateTime.parse(weaningString);
+    } else {
+      // 기본 예시 (약 20일 전)
+      _weaningStartDate = DateTime.now().subtract(const Duration(days: 20));
+    }
+
+    setState(() {
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _saveData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final cubesJson = jsonEncode(_cubes.map((c) => c.toJson()).toList());
+    final mealsJson = jsonEncode(_mealLogs.map((m) => m.toJson()).toList());
+
+    await prefs.setString('cubes_data', cubesJson);
+    await prefs.setString('meals_data', mealsJson);
+    if (_birthDate != null) {
+      await prefs.setString('baby_birth_date', _birthDate!.toIso8601String());
+    }
+    if (_weaningStartDate != null) {
+      await prefs.setString('weaning_start_date', _weaningStartDate!.toIso8601String());
+    }
+  }
+
+  // 아기 정보(생일/이유식시작일) 설정 다이얼로그
+  void _showSettingsDialog() {
+    DateTime tempBirth = _birthDate ?? DateTime.now().subtract(const Duration(days: 180));
+    DateTime tempWeaning = _weaningStartDate ?? DateTime.now().subtract(const Duration(days: 15));
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('아기 성장 & 이유식 설정', style: TextStyle(fontWeight: FontWeight.bold)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.cake_outlined, color: Color(0xFFFF7A59)),
+                    title: const Text('아기 출생일', style: TextStyle(fontSize: 14)),
+                    subtitle: Text(
+                      '${tempBirth.year}년 ${tempBirth.month}월 ${tempBirth.day}일',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    ),
+                    trailing: OutlinedButton(
+                      child: const Text('변경'),
+                      onPressed: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: tempBirth,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime.now(),
+                        );
+                        if (picked != null) {
+                          setDialogState(() => tempBirth = picked);
+                        }
+                      },
+                    ),
+                  ),
+                  const Divider(),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.restaurant_outlined, color: Color(0xFF2E7D32)),
+                    title: const Text('이유식 시작일', style: TextStyle(fontSize: 14)),
+                    subtitle: Text(
+                      '${tempWeaning.year}년 ${tempWeaning.month}월 ${tempWeaning.day}일',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    ),
+                    trailing: OutlinedButton(
+                      child: const Text('변경'),
+                      onPressed: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: tempWeaning,
+                          firstDate: tempBirth,
+                          lastDate: DateTime.now().add(const Duration(days: 30)),
+                        );
+                        if (picked != null) {
+                          setDialogState(() => tempWeaning = picked);
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      _birthDate = tempBirth;
+                      _weaningStartDate = tempWeaning;
+                    });
+                    _saveData();
+                    Navigator.pop(ctx);
+                  },
+                  child: const Text('저장'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   void _updateQuantity(CubeItem cube, int delta) {
@@ -221,59 +368,57 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       final newQty = cube.quantity + delta;
       if (newQty >= 0) cube.quantity = newQty;
     });
+    _saveData();
   }
 
   void _addNewCube(CubeItem cube) {
     setState(() {
       _cubes.insert(0, cube);
     });
+    _saveData();
   }
 
-  void _editCube(CubeItem targetCube, String newName, FoodCategory newCategory, int newUnitWeight, int newQuantity, int newShelfLifeDays) {
+  void _editCube(CubeItem targetCube, String newName, FoodCategory newCategory, int newUnitWeight, int newQuantity, DateTime newMadeDate, int newShelfLifeDays) {
     setState(() {
       targetCube.name = newName;
       targetCube.category = newCategory;
       targetCube.unitWeight = newUnitWeight;
       targetCube.quantity = newQuantity;
-      targetCube.expireDate = targetCube.madeDate.add(Duration(days: newShelfLifeDays));
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${targetCube.name} 큐브 정보가 수정되었습니다.'),
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      targetCube.madeDate = newMadeDate;
+      targetCube.expireDate = newMadeDate.add(Duration(days: newShelfLifeDays));
     });
+    _saveData();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${targetCube.name} 큐브 정보가 수정되었습니다.')),
+    );
   }
 
   void _deleteCube(CubeItem targetCube) {
     setState(() {
       _cubes.removeWhere((c) => c.id == targetCube.id);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${targetCube.name} 큐브가 보관함에서 삭제(폐기)되었습니다.'),
-          backgroundColor: Colors.grey.shade800,
-          duration: const Duration(seconds: 2),
-        ),
-      );
     });
+    _saveData();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('${targetCube.name} 큐브가 삭제되었습니다.')),
+    );
   }
 
-  void _restockCube(CubeItem cube, int addedQty, int newShelfLifeDays) {
+  void _restockCube(CubeItem cube, int addedQty, DateTime madeDate, int newShelfLifeDays) {
     setState(() {
       cube.quantity += addedQty;
-      cube.madeDate = DateTime.now();
-      cube.expireDate = DateTime.now().add(Duration(days: newShelfLifeDays));
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${cube.name} 큐브 ${addedQty}개 보충 완료!'),
-          backgroundColor: const Color(0xFF43A047),
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      cube.madeDate = madeDate;
+      cube.expireDate = madeDate.add(Duration(days: newShelfLifeDays));
     });
+    _saveData();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${cube.name} 큐브 ${addedQty}개 보충 완료!'),
+        backgroundColor: const Color(0xFF43A047),
+      ),
+    );
   }
 
   void _addMealRecord({
@@ -319,44 +464,35 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           isPlanned: isFuturePlan,
         ),
       );
-
-      final timeFormatted = '${recordDate.hour.toString().padLeft(2, '0')}:${recordDate.minute.toString().padLeft(2, '0')}';
-      final msg = isFuturePlan
-          ? '${recordDate.month}월 ${recordDate.day}일 $timeFormatted [${mealType.label}] 플랜 등록 완료'
-          : '${recordDate.month}월 ${recordDate.day}일 $timeFormatted [${mealType.label}] 기록 완료 (큐브 차감됨)';
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(msg),
-          backgroundColor: mealType.primaryColor,
-          duration: const Duration(seconds: 2),
-        ),
-      );
     });
+    _saveData();
+
+    final timeFormatted = '${recordDate.hour.toString().padLeft(2, '0')}:${recordDate.minute.toString().padLeft(2, '0')}';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${recordDate.month}월 ${recordDate.day}일 $timeFormatted [${mealType.label}] 저장 완료!'),
+        backgroundColor: mealType.primaryColor,
+      ),
+    );
   }
 
-  // 캘린더 식단 수정 함수
   void _editMealRecord(MealLog log, MealType newType, DateTime newTime, String newReaction, int newTotalGrams) {
     setState(() {
       log.mealType = newType;
       log.time = newTime;
       log.reaction = newReaction;
       log.totalGrams = newTotalGrams;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('식단 기록이 성공적으로 수정되었습니다.'),
-          duration: Duration(seconds: 2),
-        ),
-      );
     });
+    _saveData();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('식단 기록이 수정되어 저장되었습니다.')),
+    );
   }
 
-  // 캘린더 식단 삭제 함수 (과거 기록 삭제 시 차감되었던 큐브 수량 복원)
   void _deleteMealRecord(MealLog log) {
     setState(() {
       if (!log.isPlanned) {
-        // 이미 차감되었던 큐브 재고 원상 복구
         log.cubeUsage.forEach((cubeId, count) {
           final matchIndex = _cubes.indexWhere((c) => c.id == cubeId);
           if (matchIndex != -1) {
@@ -364,35 +500,57 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           }
         });
       }
-
       _mealLogs.removeWhere((l) => l.id == log.id);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(!log.isPlanned
-              ? '식단 기록이 삭제되었습니다. (사용된 큐브 재고가 보관함으로 복원되었습니다)'
-              : '식단 계획이 삭제되었습니다.'),
-          backgroundColor: Colors.grey.shade800,
-          duration: const Duration(seconds: 2),
-        ),
-      );
     });
+    _saveData();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(!log.isPlanned
+            ? '기록이 삭제되고 큐브 재고가 복원되었습니다.'
+            : '식단 계획이 삭제되었습니다.'),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFFFF7A59)),
+        ),
+      );
+    }
+
     final restockCount = _cubes.where((c) => c.quantity <= 2 || c.daysRemaining < 0).length;
 
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('토핑 이유식 매니저', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: '아기 정보 & D-day 설정',
+            onPressed: _showSettingsDialog,
+          ),
+        ],
+      ),
       body: IndexedStack(
         index: _currentTabIndex,
         children: [
           MealLogTab(
             cubes: _cubes,
+            birthDate: _birthDate,
+            weaningStartDate: _weaningStartDate,
             onSaveMeal: _addMealRecord,
           ),
           MealCalendarTab(
             mealLogs: _mealLogs,
+            birthDate: _birthDate,
+            weaningStartDate: _weaningStartDate,
             onEditMeal: _editMealRecord,
             onDeleteMeal: _deleteMealRecord,
           ),
@@ -449,10 +607,42 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 }
 
 /// ==========================================
-/// (1) 식단 기록 화면
+/// D-Day 계산 헬퍼 함수
+/// ==========================================
+String calculateDdayString(DateTime targetDate, DateTime? birthDate, DateTime? weaningStartDate) {
+  final target = DateTime(targetDate.year, targetDate.month, targetDate.day);
+  List<String> ddays = [];
+
+  if (birthDate != null) {
+    final birth = DateTime(birthDate.year, birthDate.month, birthDate.day);
+    final diff = target.difference(birth).inDays + 1; // 출생 당일 1일차
+    if (diff > 0) {
+      ddays.add('생후 D+$diff일');
+    }
+  }
+
+  if (weaningStartDate != null) {
+    final weaning = DateTime(weaningStartDate.year, weaningStartDate.month, weaningStartDate.day);
+    final diff = target.difference(weaning).inDays + 1; // 시작 당일 1일차
+    if (diff > 0) {
+      ddays.add('이유식 $diff일차');
+    } else if (diff == 0) {
+      ddays.add('이유식 D-Day');
+    } else {
+      ddays.add('이유식 D${diff - 1}');
+    }
+  }
+
+  return ddays.join(' · ');
+}
+
+/// ==========================================
+/// (1) 식단 기록 화면 (D-Day 배너 탑재)
 /// ==========================================
 class MealLogTab extends StatefulWidget {
   final List<CubeItem> cubes;
+  final DateTime? birthDate;
+  final DateTime? weaningStartDate;
   final Function({
     required MealType mealType,
     required DateTime recordDate,
@@ -463,6 +653,8 @@ class MealLogTab extends StatefulWidget {
   const MealLogTab({
     super.key,
     required this.cubes,
+    required this.birthDate,
+    required this.weaningStartDate,
     required this.onSaveMeal,
   });
 
@@ -589,127 +781,224 @@ class _MealLogTabState extends State<MealLogTab> {
     final hourStr = _selectedTime.hour.toString().padLeft(2, '0');
     final minuteStr = _selectedTime.minute.toString().padLeft(2, '0');
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('식단 작성 및 계획', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: _isFutureDate ? const Color(0xFFE8F4FD) : Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: _isFutureDate ? const Color(0xFF90CAF9) : Colors.grey.shade300,
-                ),
+    final ddaySummary = calculateDdayString(_selectedDate, widget.birthDate, widget.weaningStartDate);
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 1. 날짜, 시간 및 D-day 안내 카드
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: _isFutureDate ? const Color(0xFFE8F4FD) : Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: _isFutureDate ? const Color(0xFF90CAF9) : Colors.grey.shade300,
               ),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        _isFutureDate ? Icons.next_plan_outlined : Icons.calendar_today_outlined,
-                        color: _isFutureDate ? Colors.blue.shade700 : const Color(0xFFFF7A59),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      _isFutureDate ? Icons.next_plan_outlined : Icons.calendar_today_outlined,
+                      color: _isFutureDate ? Colors.blue.shade700 : const Color(0xFFFF7A59),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            isToday
+                                ? '오늘 식단 기록'
+                                : (_isFutureDate ? '향후 식단 계획 (미래)' : '이전 날짜 소급 기록 (과거)'),
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: _isFutureDate ? Colors.blue.shade800 : Colors.grey.shade700,
+                            ),
+                          ),
+                          Text(
+                            '${_selectedDate.year}년 ${_selectedDate.month}월 ${_selectedDate.day}일',
+                            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              isToday
-                                  ? '오늘 날짜 기록'
-                                  : (_isFutureDate ? '향후 식단 계획 (미래)' : '이전 날짜 소급 기록 (과거)'),
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: _isFutureDate ? Colors.blue.shade800 : Colors.grey.shade700,
-                              ),
-                            ),
-                            Text(
-                              '${_selectedDate.year}년 ${_selectedDate.month}월 ${_selectedDate.day}일',
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                            ),
-                          ],
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _pickDate,
+                      icon: const Icon(Icons.edit_calendar, size: 14),
+                      label: const Text('날짜 변경'),
+                      style: OutlinedButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        foregroundColor: _isFutureDate ? Colors.blue.shade800 : const Color(0xFFFF7A59),
+                        side: BorderSide(
+                          color: _isFutureDate ? Colors.blue.shade300 : const Color(0xFFFF9E7D),
                         ),
                       ),
-                      OutlinedButton.icon(
-                        onPressed: _pickDate,
-                        icon: const Icon(Icons.edit_calendar, size: 15),
-                        label: const Text('날짜 변경'),
-                        style: OutlinedButton.styleFrom(
-                          visualDensity: VisualDensity.compact,
-                          foregroundColor: _isFutureDate ? Colors.blue.shade800 : const Color(0xFFFF7A59),
-                          side: BorderSide(
-                            color: _isFutureDate ? Colors.blue.shade300 : const Color(0xFFFF9E7D),
+                    ),
+                  ],
+                ),
+                if (ddaySummary.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF7A59).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.child_care, size: 16, color: Color(0xFFFF7A59)),
+                        const SizedBox(width: 6),
+                        Text(
+                          ddaySummary,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFFF7A59),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const Divider(height: 16, thickness: 0.5),
-                  Row(
-                    children: [
-                      const Icon(Icons.access_time, color: Colors.blueGrey, size: 20),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          '식사 시간: $hourStr:$minuteStr',
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: _pickTime,
-                        icon: const Icon(Icons.schedule, size: 15),
-                        label: const Text('시간 변경'),
-                        style: OutlinedButton.styleFrom(
-                          visualDensity: VisualDensity.compact,
-                          foregroundColor: Colors.blueGrey.shade800,
-                          side: BorderSide(color: Colors.blueGrey.shade300),
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ],
-              ),
+                const Divider(height: 18, thickness: 0.5),
+                Row(
+                  children: [
+                    const Icon(Icons.access_time, color: Colors.blueGrey, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        '식사 시간: $hourStr:$minuteStr',
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _pickTime,
+                      icon: const Icon(Icons.schedule, size: 14),
+                      label: const Text('시간 변경'),
+                      style: OutlinedButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        foregroundColor: Colors.blueGrey.shade800,
+                        side: BorderSide(color: Colors.blueGrey.shade300),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
+          ),
+          const SizedBox(height: 16),
 
-            const Text('끼니 선택', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-            const SizedBox(height: 8),
-            Row(
-              children: MealType.values.map((m) {
-                final isSelected = _selectedMealType == m;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: FilterChip(
-                    label: Text(m.label),
-                    labelStyle: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: isSelected ? Colors.white : m.primaryColor,
-                    ),
-                    selected: isSelected,
-                    checkmarkColor: Colors.white,
-                    backgroundColor: m.bgColor,
-                    selectedColor: m.primaryColor,
-                    side: BorderSide(
-                      color: isSelected ? m.primaryColor : m.primaryColor.withOpacity(0.3),
-                    ),
-                    onSelected: (val) {
-                      if (val) setState(() => _selectedMealType = m);
-                    },
+          // 2. 끼니 차수 선택
+          const Text('끼니 선택', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          const SizedBox(height: 8),
+          Row(
+            children: MealType.values.map((m) {
+              final isSelected = _selectedMealType == m;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: FilterChip(
+                  label: Text(m.label),
+                  labelStyle: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: isSelected ? Colors.white : m.primaryColor,
                   ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 16),
+                  selected: isSelected,
+                  checkmarkColor: Colors.white,
+                  backgroundColor: m.bgColor,
+                  selectedColor: m.primaryColor,
+                  side: BorderSide(
+                    color: isSelected ? m.primaryColor : m.primaryColor.withOpacity(0.3),
+                  ),
+                  onSelected: (val) {
+                    if (val) setState(() => _selectedMealType = m);
+                  },
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 16),
 
+          // 3. 토핑 큐브 선택 카드
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('토핑 큐브 담기', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    Text(
+                      '총합: $currentTotalGrams g',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _selectedMealType.primaryColor),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                if (_isFutureDate)
+                  Text(
+                    '* 향후 식단에 큐브를 담아두면 [제작 필요] 탭에서 마감일을 자동으로 계산해 줍니다.',
+                    style: TextStyle(fontSize: 11, color: Colors.blue.shade700),
+                  ),
+                const SizedBox(height: 12),
+                widget.cubes.isEmpty
+                    ? const Text('보관 중인 큐브가 없습니다.')
+                    : Column(
+                        children: widget.cubes.map((cube) {
+                          final count = _getSelectedCount(cube);
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '${cube.name} (${cube.unitWeight}g)',
+                                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                                      ),
+                                      Text(
+                                        '재고: ${cube.quantity}개 · 제조: ${cube.madeDate.month}/${cube.madeDate.day} (${cube.dDayText})',
+                                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.remove_circle_outline, size: 20),
+                                  onPressed: count > 0 ? () => _modifyCubeSelection(cube, -1) : null,
+                                ),
+                                Text('$count', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                                IconButton(
+                                  icon: const Icon(Icons.add_circle_outline, size: 20),
+                                  onPressed: () => _modifyCubeSelection(cube, 1),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // 4. 빠른 반응 체크
+          if (!_isFutureDate) ...[
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -721,143 +1010,71 @@ class _MealLogTabState extends State<MealLogTab> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('토핑 큐브 담기', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                      Text(
-                        '총합: $currentTotalGrams g',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: _selectedMealType.primaryColor),
+                      const Icon(Icons.touch_app_outlined, size: 18, color: Color(0xFFFF7A59)),
+                      const SizedBox(width: 6),
+                      const Text(
+                        '빠른 반응 체크 (터치 시 자동 입력)',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  if (_isFutureDate)
-                    Text(
-                      '* 향후 식단에 큐브를 담아두면 [제작 필요] 탭에서 마감일을 자동으로 계산해 줍니다.',
-                      style: TextStyle(fontSize: 11, color: Colors.blue.shade700),
-                    ),
                   const SizedBox(height: 12),
-                  widget.cubes.isEmpty
-                      ? const Text('보관 중인 큐브가 없습니다.')
-                      : Column(
-                          children: widget.cubes.map((cube) {
-                            final count = _getSelectedCount(cube);
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 6),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          '${cube.name} (${cube.unitWeight}g)',
-                                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-                                        ),
-                                        Text(
-                                          '현재 실물 재고: ${cube.quantity}개 (${cube.dDayText})',
-                                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.remove_circle_outline, size: 20),
-                                    onPressed: count > 0 ? () => _modifyCubeSelection(cube, -1) : null,
-                                  ),
-                                  Text('$count', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                                  IconButton(
-                                    icon: const Icon(Icons.add_circle_outline, size: 20),
-                                    onPressed: () => _modifyCubeSelection(cube, 1),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }).toList(),
-                        ),
+                  _buildTagCategoryRow('식사 태도', _attitudeTags, const Color(0xFF388E3C)),
+                  const SizedBox(height: 10),
+                  _buildTagCategoryRow('피부/알레르기', _skinTags, const Color(0xFFD32F2F)),
+                  const SizedBox(height: 10),
+                  _buildTagCategoryRow('배변 상태', _stoolTags, const Color(0xFFF57C00)),
                 ],
               ),
             ),
             const SizedBox(height: 16),
-
-            if (!_isFutureDate) ...[
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.grey.shade200),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.touch_app_outlined, size: 18, color: Color(0xFFFF7A59)),
-                        const SizedBox(width: 6),
-                        const Text(
-                          '빠른 반응 체크 (터치 시 자동 입력)',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    _buildTagCategoryRow('식사 태도', _attitudeTags, const Color(0xFF388E3C)),
-                    const SizedBox(height: 10),
-                    _buildTagCategoryRow('피부/알레르기', _skinTags, const Color(0xFFD32F2F)),
-                    const SizedBox(height: 10),
-                    _buildTagCategoryRow('배변 상태', _stoolTags, const Color(0xFFF57C00)),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-
-            TextField(
-              controller: _reactionController,
-              decoration: InputDecoration(
-                labelText: _isFutureDate ? '식단 계획 메모 (선택)' : '아기 반응 / 추가 메모',
-                hintText: _isFutureDate ? '예: 새로운 채소 테스트 예정' : '위 버튼을 터치하거나 직접 작성하세요',
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
-                ),
-                suffixIcon: _reactionController.text.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear, size: 18),
-                        onPressed: () {
-                          setState(() {
-                            _reactionController.clear();
-                            _activeTags.clear();
-                          });
-                        },
-                      )
-                    : null,
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton.icon(
-                onPressed: _submitMeal,
-                icon: Icon(_isFutureDate ? Icons.event_available : Icons.check),
-                label: Text(
-                  _isFutureDate ? '[${_selectedMealType.label}] 계획 저장하기' : '[${_selectedMealType.label}] 기록 완료 & 큐브 차감',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _isFutureDate ? const Color(0xFF1976D2) : _selectedMealType.primaryColor,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-            ),
           ],
-        ),
+
+          TextField(
+            controller: _reactionController,
+            decoration: InputDecoration(
+              labelText: _isFutureDate ? '식단 계획 메모 (선택)' : '아기 반응 / 추가 메모',
+              hintText: _isFutureDate ? '예: 새로운 채소 테스트 예정' : '위 버튼을 터치하거나 직접 작성하세요',
+              filled: true,
+              fillColor: Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              suffixIcon: _reactionController.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear, size: 18),
+                      onPressed: () {
+                        setState(() {
+                          _reactionController.clear();
+                          _activeTags.clear();
+                        });
+                      },
+                    )
+                  : null,
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: _submitMeal,
+              icon: Icon(_isFutureDate ? Icons.event_available : Icons.check),
+              label: Text(
+                _isFutureDate ? '[${_selectedMealType.label}] 계획 저장하기' : '[${_selectedMealType.label}] 기록 완료 & 큐브 차감',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _isFutureDate ? const Color(0xFF1976D2) : _selectedMealType.primaryColor,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -902,18 +1119,22 @@ class _MealLogTabState extends State<MealLogTab> {
 }
 
 /// ==========================================
-/// (2) 캘린더 화면 (식단 수정 및 삭제 기능 추가)
+/// (2) 캘린더 화면 (성장 D-Day 타이틀 결합)
 /// ==========================================
 enum CalendarViewMode { week, month }
 
 class MealCalendarTab extends StatefulWidget {
   final List<MealLog> mealLogs;
+  final DateTime? birthDate;
+  final DateTime? weaningStartDate;
   final Function(MealLog log, MealType newType, DateTime newTime, String newReaction, int newTotalGrams) onEditMeal;
   final Function(MealLog log) onDeleteMeal;
 
   const MealCalendarTab({
     super.key,
     required this.mealLogs,
+    required this.birthDate,
+    required this.weaningStartDate,
     required this.onEditMeal,
     required this.onDeleteMeal,
   });
@@ -971,7 +1192,6 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
     return List.generate(7, (i) => startOfWeek.add(Duration(days: i)));
   }
 
-  // 식단 수정 다이얼로그
   void _showEditMealDialog(MealLog log) {
     MealType currentType = log.mealType;
     TimeOfDay currentTime = TimeOfDay(hour: log.time.hour, minute: log.time.minute);
@@ -998,8 +1218,6 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                       style: TextStyle(fontSize: 13, color: Colors.grey.shade700, fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 16),
-
-                    // 1. 끼니 선택
                     const Text('끼니 차수', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 6),
                     Row(
@@ -1024,8 +1242,6 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                       }).toList(),
                     ),
                     const SizedBox(height: 12),
-
-                    // 2. 시간 변경
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -1046,16 +1262,12 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                       ],
                     ),
                     const SizedBox(height: 8),
-
-                    // 3. 총 섭취량(g)
                     TextField(
                       controller: gramsController,
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(labelText: '총 섭취량 (g)'),
                     ),
                     const SizedBox(height: 12),
-
-                    // 4. 반응 및 메모
                     TextField(
                       controller: reactionController,
                       decoration: const InputDecoration(labelText: '아기 반응 / 메모'),
@@ -1098,7 +1310,6 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
     );
   }
 
-  // 식단 삭제 확인 다이얼로그
   void _confirmDeleteMeal(MealLog log) {
     showDialog(
       context: context,
@@ -1146,12 +1357,10 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
       headerTitle = '${_focusedDate.year}년 ${_focusedDate.month}월';
     }
 
+    final selectedDdayStr = calculateDdayString(_selectedDate, widget.birthDate, widget.weaningStartDate);
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('이유식 식단 캘린더', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-      ),
+      backgroundColor: const Color(0xFFF9F9FB),
       body: Column(
         children: [
           Container(
@@ -1225,19 +1434,39 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
             child: _viewMode == CalendarViewMode.week ? _buildWeekView() : _buildMonthView(),
           ),
           const Divider(height: 1, thickness: 1, color: Color(0xFFEEEEEE)),
+
+          // 선택된 날짜 헤더 & D-day 표시
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
             child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Icon(Icons.event_note, color: Color(0xFFFF7A59), size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  '${_selectedDate.month}월 ${_selectedDate.day}일 식단 (${selectedDayLogs.length}건)',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                Row(
+                  children: [
+                    const Icon(Icons.event_note, color: Color(0xFFFF7A59), size: 18),
+                    const SizedBox(width: 6),
+                    Text(
+                      '${_selectedDate.month}월 ${_selectedDate.day}일 식단',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ],
                 ),
+                if (selectedDdayStr.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF7A59).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      selectedDdayStr,
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFFF7A59)),
+                    ),
+                  ),
               ],
             ),
           ),
+
           Expanded(
             child: selectedDayLogs.isEmpty
                 ? Center(
@@ -1323,7 +1552,6 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                                         ),
                                     ],
                                   ),
-                                  // 수정 및 삭제 팝업 메뉴
                                   Row(
                                     children: [
                                       Text(
@@ -1569,13 +1797,13 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
 }
 
 /// ==========================================
-/// (3) 큐브 보관함 화면
+/// (3) 큐브 보관함 화면 (제조일자 직접 선택 추가)
 /// ==========================================
 class CubeStockTab extends StatefulWidget {
   final List<CubeItem> cubes;
   final Function(CubeItem, int) onUpdateQty;
   final Function(CubeItem) onAddCube;
-  final Function(CubeItem, String, FoodCategory, int, int, int) onEditCube;
+  final Function(CubeItem, String, FoodCategory, int, int, DateTime, int) onEditCube;
   final Function(CubeItem) onDeleteCube;
 
   const CubeStockTab({
@@ -1599,6 +1827,7 @@ class _CubeStockTabState extends State<CubeStockTab> {
     final weightController = TextEditingController(text: '10');
     final qtyController = TextEditingController(text: '6');
     FoodCategory selectedCat = FoodCategory.vegetable;
+    DateTime selectedMadeDate = DateTime.now();
     int shelfLifeDays = 7;
 
     showDialog(
@@ -1648,12 +1877,40 @@ class _CubeStockTabState extends State<CubeStockTab> {
                       ],
                     ),
                     const SizedBox(height: 12),
+
+                    // 제조일자 선택 행
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '제조일: ${selectedMadeDate.year}.${selectedMadeDate.month}.${selectedMadeDate.day}',
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                        ),
+                        TextButton.icon(
+                          icon: const Icon(Icons.calendar_today, size: 14),
+                          label: const Text('날짜 선택'),
+                          onPressed: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: selectedMadeDate,
+                              firstDate: DateTime.now().subtract(const Duration(days: 30)),
+                              lastDate: DateTime.now(),
+                            );
+                            if (picked != null) {
+                              setDialogState(() => selectedMadeDate = picked);
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+
                     DropdownButtonFormField<int>(
                       value: shelfLifeDays,
-                      decoration: const InputDecoration(labelText: '보관 기한'),
+                      decoration: const InputDecoration(labelText: '보관 기한 (제조일 기준)'),
                       items: const [
                         DropdownMenuItem(value: 5, child: Text('5일')),
-                        DropdownMenuItem(value: 7, child: Text('7일 (권장)')),
+                        DropdownMenuItem(value: 7, child: Text('7일 (1주일 권장)')),
                         DropdownMenuItem(value: 10, child: Text('10일')),
                         DropdownMenuItem(value: 14, child: Text('14일')),
                       ],
@@ -1669,7 +1926,6 @@ class _CubeStockTabState extends State<CubeStockTab> {
                 ElevatedButton(
                   onPressed: () {
                     if (nameController.text.trim().isEmpty) return;
-                    final now = DateTime.now();
                     widget.onAddCube(
                       CubeItem(
                         id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -1677,8 +1933,8 @@ class _CubeStockTabState extends State<CubeStockTab> {
                         category: selectedCat,
                         unitWeight: int.tryParse(weightController.text) ?? 10,
                         quantity: int.tryParse(qtyController.text) ?? 1,
-                        madeDate: now,
-                        expireDate: now.add(Duration(days: shelfLifeDays)),
+                        madeDate: selectedMadeDate,
+                        expireDate: selectedMadeDate.add(Duration(days: shelfLifeDays)),
                       ),
                     );
                     Navigator.pop(ctx);
@@ -1698,6 +1954,7 @@ class _CubeStockTabState extends State<CubeStockTab> {
     final weightController = TextEditingController(text: '${cube.unitWeight}');
     final qtyController = TextEditingController(text: '${cube.quantity}');
     FoodCategory selectedCat = cube.category;
+    DateTime selectedMadeDate = cube.madeDate;
 
     int shelfLifeDays = cube.expireDate.difference(cube.madeDate).inDays;
     if (![5, 7, 10, 14].contains(shelfLifeDays)) {
@@ -1751,9 +2008,37 @@ class _CubeStockTabState extends State<CubeStockTab> {
                       ],
                     ),
                     const SizedBox(height: 12),
+
+                    // 제조일자 수정
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '제조일: ${selectedMadeDate.year}.${selectedMadeDate.month}.${selectedMadeDate.day}',
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                        ),
+                        TextButton.icon(
+                          icon: const Icon(Icons.calendar_today, size: 14),
+                          label: const Text('날짜 변경'),
+                          onPressed: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: selectedMadeDate,
+                              firstDate: DateTime.now().subtract(const Duration(days: 60)),
+                              lastDate: DateTime.now(),
+                            );
+                            if (picked != null) {
+                              setDialogState(() => selectedMadeDate = picked);
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+
                     DropdownButtonFormField<int>(
                       value: shelfLifeDays,
-                      decoration: const InputDecoration(labelText: '보관 기한 (제작일 기준)'),
+                      decoration: const InputDecoration(labelText: '보관 기한 (제조일 기준)'),
                       items: const [
                         DropdownMenuItem(value: 5, child: Text('5일')),
                         DropdownMenuItem(value: 7, child: Text('7일 (권장)')),
@@ -1778,6 +2063,7 @@ class _CubeStockTabState extends State<CubeStockTab> {
                       selectedCat,
                       int.tryParse(weightController.text) ?? cube.unitWeight,
                       int.tryParse(qtyController.text) ?? cube.quantity,
+                      selectedMadeDate,
                       shelfLifeDays,
                     );
                     Navigator.pop(ctx);
@@ -1828,11 +2114,7 @@ class _CubeStockTabState extends State<CubeStockTab> {
         : widget.cubes.where((c) => c.category == _selectedCategory).toList();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('냉동 큐브 보관함', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-      ),
+      backgroundColor: const Color(0xFFF9F9FB),
       body: Column(
         children: [
           SizedBox(
@@ -1973,6 +2255,10 @@ class _CubeStockTabState extends State<CubeStockTab> {
                                           '개당 ${cube.unitWeight}g · 총 ${cube.unitWeight * cube.quantity}g',
                                           style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                                         ),
+                                        Text(
+                                          '제조일: ${cube.madeDate.year}.${cube.madeDate.month}.${cube.madeDate.day}',
+                                          style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -2023,7 +2309,7 @@ class _CubeStockTabState extends State<CubeStockTab> {
 }
 
 /// ==========================================
-/// (4) 제작 필요 및 마감일(Deadline) 역산 화면
+/// (4) 제작 필요 및 마감일(Deadline) 화면
 /// ==========================================
 class RestockPlanItem {
   final CubeItem cube;
@@ -2042,7 +2328,7 @@ class RestockPlanItem {
 class RestockPlanTab extends StatelessWidget {
   final List<CubeItem> cubes;
   final List<MealLog> mealLogs;
-  final Function(CubeItem cube, int addedQty, int newShelfLifeDays) onRestock;
+  final Function(CubeItem cube, int addedQty, DateTime madeDate, int newShelfLifeDays) onRestock;
 
   const RestockPlanTab({
     super.key,
@@ -2138,6 +2424,7 @@ class RestockPlanTab extends StatelessWidget {
 
   void _showRestockDialog(BuildContext context, CubeItem cube) {
     final qtyController = TextEditingController(text: '6');
+    DateTime madeDate = DateTime.now();
     int shelfLifeDays = 7;
 
     showDialog(
@@ -2151,7 +2438,7 @@ class RestockPlanTab extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('새로 제작한 큐브 개수를 입력하면 보관함 재고와 소비기한이 새로 갱신됩니다.',
+                  Text('새로 제작한 개수와 제조일자를 입력하면 보관함 재고와 기한이 새로 갱신됩니다.',
                       style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
                   const SizedBox(height: 16),
                   TextField(
@@ -2160,6 +2447,31 @@ class RestockPlanTab extends StatelessWidget {
                     decoration: const InputDecoration(labelText: '새로 만든 개수'),
                   ),
                   const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '제조일: ${madeDate.year}.${madeDate.month}.${madeDate.day}',
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                      ),
+                      TextButton.icon(
+                        icon: const Icon(Icons.calendar_today, size: 14),
+                        label: const Text('날짜 변경'),
+                        onPressed: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: madeDate,
+                            firstDate: DateTime.now().subtract(const Duration(days: 14)),
+                            lastDate: DateTime.now(),
+                          );
+                          if (picked != null) {
+                            setDialogState(() => madeDate = picked);
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
                   DropdownButtonFormField<int>(
                     value: shelfLifeDays,
                     decoration: const InputDecoration(labelText: '보관 기한 설정'),
@@ -2180,7 +2492,7 @@ class RestockPlanTab extends StatelessWidget {
                 ElevatedButton(
                   onPressed: () {
                     final qty = int.tryParse(qtyController.text) ?? 6;
-                    onRestock(cube, qty, shelfLifeDays);
+                    onRestock(cube, qty, madeDate, shelfLifeDays);
                     Navigator.pop(ctx);
                   },
                   child: const Text('보관함에 반영'),
@@ -2198,11 +2510,7 @@ class RestockPlanTab extends StatelessWidget {
     final restockItems = _calculateRestockPlans();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('큐브 제작 플랜 & 마감 알림', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-      ),
+      backgroundColor: const Color(0xFFF9F9FB),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -2305,7 +2613,7 @@ class RestockPlanTab extends StatelessWidget {
                                           ),
                                           const SizedBox(height: 6),
                                           Text(cube.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                                          Text('현재 실물 재고: ${cube.quantity}개 남음 (${cube.dDayText})',
+                                          Text('현재 재고: ${cube.quantity}개 · 제조: ${cube.madeDate.month}/${cube.madeDate.day} (${cube.dDayText})',
                                               style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
                                         ],
                                       ),
