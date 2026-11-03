@@ -11,9 +11,7 @@ class BabyFoodApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 따뜻하고 아기자기한 소프트 민트 테마
     const mintPrimary = Color(0xFF3EB489);
-    const mintLight = Color(0xFFE8F8F2);
 
     return MaterialApp(
       title: '토핑 이유식 매니저',
@@ -25,7 +23,7 @@ class BabyFoodApp extends StatelessWidget {
           secondary: const Color(0xFF5BC0BE),
           surface: Colors.white,
         ),
-        scaffoldBackgroundColor: const Color(0xFFF4F9F6), // 살짝 민트빛이 감도는 소프트 화이트 배경
+        scaffoldBackgroundColor: const Color(0xFFF4F9F6),
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.white,
           foregroundColor: Color(0xFF234E42),
@@ -38,18 +36,19 @@ class BabyFoodApp extends StatelessWidget {
   }
 }
 
-/// 1. 끼니 차수 정의 및 색상
+/// 1. 끼니 차수 정의 및 순서 정렬 가중치(order)
 enum MealType {
-  first('1끼', Color(0xFFFF7A59), Color(0xFFFFEFEB)),
-  second('2끼', Color(0xFF2E7D32), Color(0xFFE8F5E9)),
-  third('3끼', Color(0xFF5E35B1), Color(0xFFEDE7F6)),
-  snack('간식', Color(0xFFF57F17), Color(0xFFFFFDE7));
+  first('1끼', 1, Color(0xFFFF7A59), Color(0xFFFFEFEB)),
+  second('2끼', 2, Color(0xFF2E7D32), Color(0xFFE8F5E9)),
+  third('3끼', 3, Color(0xFF5E35B1), Color(0xFFEDE7F6)),
+  snack('간식', 4, Color(0xFFF57F17), Color(0xFFFFFDE7)); // 항상 마지막
 
   final String label;
+  final int order;
   final Color primaryColor;
   final Color bgColor;
 
-  const MealType(this.label, this.primaryColor, this.bgColor);
+  const MealType(this.label, this.order, this.primaryColor, this.bgColor);
 
   static MealType fromLabel(String label) {
     return MealType.values.firstWhere(
@@ -59,19 +58,20 @@ enum MealType {
   }
 }
 
-/// 2. 카테고리 정의
+/// 2. 카테고리 정의 (정렬 우선순위: 곡류 -> 단백질 -> 채소 -> 과일 -> 기타)
 enum FoodCategory {
-  grain('곡류', Color(0xFFFFF3CD), Color(0xFF856404)),
-  meat('단백질', Color(0xFFF8D7DA), Color(0xFF721C24)),
-  vegetable('채소', Color(0xFFD4EDDA), Color(0xFF155724)),
-  fruit('과일', Color(0xFFD1ECF1), Color(0xFF0C5460)),
-  etc('기타', Color(0xFFE2E3E5), Color(0xFF383D41));
+  grain('곡류', 1, Color(0xFFFFF3CD), Color(0xFF856404)),
+  meat('단백질', 2, Color(0xFFF8D7DA), Color(0xFF721C24)),
+  vegetable('채소', 3, Color(0xFFD4EDDA), Color(0xFF155724)),
+  fruit('과일', 4, Color(0xFFD1ECF1), Color(0xFF0C5460)),
+  etc('기타', 5, Color(0xFFE2E3E5), Color(0xFF383D41));
 
   final String label;
+  final int sortOrder;
   final Color bgColor;
   final Color textColor;
 
-  const FoodCategory(this.label, this.bgColor, this.textColor);
+  const FoodCategory(this.label, this.sortOrder, this.bgColor, this.textColor);
 
   static FoodCategory fromLabel(String label) {
     return FoodCategory.values.firstWhere(
@@ -79,6 +79,34 @@ enum FoodCategory {
       orElse: () => FoodCategory.etc,
     );
   }
+}
+
+/// 식재료명 기반 이모지 매퍼 함수
+String getFoodEmoji(String name) {
+  final cleanName = name.trim().toLowerCase();
+  if (cleanName.contains('쌀') || cleanName.contains('오트밀') || cleanName.contains('보리') || cleanName.contains('퀴노아')) return '🌾';
+  if (cleanName.contains('소고기') || cleanName.contains('안심') || cleanName.contains('우둔')) return '🥩';
+  if (cleanName.contains('닭') || cleanName.contains('닭가슴살') || cleanName.contains('닭안심')) return '🍗';
+  if (cleanName.contains('돼지')) return '🥓';
+  if (cleanName.contains('생선') || cleanName.contains('대구') || cleanName.contains('연어')) return '🐟';
+  if (cleanName.contains('단호박') || cleanName.contains('호박')) return '🎃';
+  if (cleanName.contains('브로콜리')) return '🥦';
+  if (cleanName.contains('당근')) return '🥕';
+  if (cleanName.contains('애호박') || cleanName.contains('오이')) return '🥒';
+  if (cleanName.contains('감자')) return '🥔';
+  if (cleanName.contains('고구마')) return '🍠';
+  if (cleanName.contains('양배추') || cleanName.contains('배추') || cleanName.contains('청경채')) return '🥬';
+  if (cleanName.contains('사과')) return '🍎';
+  if (cleanName.contains('배')) return '🍐';
+  if (cleanName.contains('바나나')) return '🍌';
+  if (cleanName.contains('아보카도')) return '🥑';
+  if (cleanName.contains('치즈')) return '🧀';
+  if (cleanName.contains('계란') || cleanName.contains('달걀') || cleanName.contains('노른자')) return '🥚';
+  if (cleanName.contains('두부') || cleanName.contains('콩')) return '🫘';
+  if (cleanName.contains('버섯')) return '🍄';
+  if (cleanName.contains('토마토')) return '🍅';
+  if (cleanName.contains('비트')) return '🫐';
+  return '🥄';
 }
 
 /// 3. 큐브 데이터 모델
@@ -91,6 +119,7 @@ class CubeItem {
   DateTime madeDate;
   DateTime expireDate;
   bool isPlannedOnly;
+  int createdAt; // 카테고리 내부 생성 순서 보장용
 
   CubeItem({
     required this.id,
@@ -101,7 +130,8 @@ class CubeItem {
     required this.madeDate,
     required this.expireDate,
     this.isPlannedOnly = false,
-  });
+    int? createdAt,
+  }) : createdAt = createdAt ?? DateTime.now().millisecondsSinceEpoch;
 
   int get daysRemaining {
     if (isPlannedOnly) return 999;
@@ -136,6 +166,7 @@ class CubeItem {
         'madeDate': madeDate.toIso8601String(),
         'expireDate': expireDate.toIso8601String(),
         'isPlannedOnly': isPlannedOnly,
+        'createdAt': createdAt,
       };
 
   factory CubeItem.fromJson(Map<String, dynamic> json) => CubeItem(
@@ -147,6 +178,7 @@ class CubeItem {
         madeDate: DateTime.parse(json['madeDate']),
         expireDate: DateTime.parse(json['expireDate']),
         isPlannedOnly: json['isPlannedOnly'] ?? false,
+        createdAt: json['createdAt'],
       );
 }
 
@@ -156,7 +188,7 @@ class MealLog {
   MealType mealType;
   DateTime time;
   List<String> ingredients;
-  Map<String, int> cubeUsage;
+  Map<String, int> cubeUsage; // cubeId -> count
   int totalGrams;
   String reaction;
   bool isPlanned;
@@ -235,21 +267,33 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       _cubes = [
         CubeItem(
           id: '1',
-          name: '소고기 안심',
-          category: FoodCategory.meat,
-          unitWeight: 10,
-          quantity: 2,
-          madeDate: now.subtract(const Duration(days: 4)),
-          expireDate: now.add(const Duration(days: 3)),
-        ),
-        CubeItem(
-          id: '2',
           name: '오트밀쌀죽',
           category: FoodCategory.grain,
           unitWeight: 30,
           quantity: 5,
           madeDate: now.subtract(const Duration(days: 2)),
           expireDate: now.add(const Duration(days: 5)),
+          createdAt: 1000,
+        ),
+        CubeItem(
+          id: '2',
+          name: '소고기 안심',
+          category: FoodCategory.meat,
+          unitWeight: 10,
+          quantity: 2,
+          madeDate: now.subtract(const Duration(days: 4)),
+          expireDate: now.add(const Duration(days: 3)),
+          createdAt: 2000,
+        ),
+        CubeItem(
+          id: '3',
+          name: '단호박',
+          category: FoodCategory.vegetable,
+          unitWeight: 15,
+          quantity: 2,
+          madeDate: now.subtract(const Duration(days: 1)),
+          expireDate: now.add(const Duration(days: 6)),
+          createdAt: 3000,
         ),
       ];
     }
@@ -596,6 +640,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           ),
           MealCalendarTab(
             mealLogs: _mealLogs,
+            cubes: _cubes,
             birthDate: _birthDate,
             weaningStartDate: _weaningStartDate,
             onEditMeal: _editMealRecord,
@@ -685,7 +730,7 @@ String calculateDdayString(DateTime targetDate, DateTime? birthDate, DateTime? w
 }
 
 /// ==========================================
-/// (1) 식단 기록 화면 (민트 테마 적용)
+/// (1) 식단 기록 화면 (곡류-단백질-채소-과일-기타 정렬 적용)
 /// ==========================================
 class MealLogTab extends StatefulWidget {
   final List<CubeItem> cubes;
@@ -817,6 +862,7 @@ class _MealLogTabState extends State<MealLogTab> {
                       madeDate: DateTime.now(),
                       expireDate: DateTime.now().add(const Duration(days: 7)),
                       isPlannedOnly: true,
+                      createdAt: DateTime.now().millisecondsSinceEpoch,
                     );
 
                     widget.onAddPlannedCube(newCube);
@@ -912,6 +958,14 @@ class _MealLogTabState extends State<MealLogTab> {
     final minuteStr = _selectedTime.minute.toString().padLeft(2, '0');
 
     final ddaySummary = calculateDdayString(_selectedDate, widget.birthDate, widget.weaningStartDate);
+
+    // 식재료 정렬 로직: 곡류(1) -> 단백질(2) -> 채소(3) -> 과일(4) -> 기타(5), 카테고리 내에서는 등록 순서 유지
+    final sortedCubes = List<CubeItem>.from(widget.cubes)
+      ..sort((a, b) {
+        final catCompare = a.category.sortOrder.compareTo(b.category.sortOrder);
+        if (catCompare != 0) return catCompare;
+        return a.createdAt.compareTo(b.createdAt);
+      });
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -1058,7 +1112,7 @@ class _MealLogTabState extends State<MealLogTab> {
           ),
           const SizedBox(height: 16),
 
-          // 3. 토핑 큐브 선택 카드
+          // 3. 토핑 큐브 선택 카드 (곡류-단백질-채소-과일-기타 순 나열)
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -1072,7 +1126,7 @@ class _MealLogTabState extends State<MealLogTab> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('토핑 큐브 담기', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF234E42))),
+                    const Text('토핑 큐브 담기 (분류순)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF234E42))),
                     Text(
                       '총합: $currentTotalGrams g',
                       style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF3EB489)),
@@ -1083,25 +1137,42 @@ class _MealLogTabState extends State<MealLogTab> {
                 Text(
                   _isFutureDate
                       ? '* 새로운 재료는 아래 [+ 미등록 재료 직접 추가]로 담으면 제작 알림이 뜹니다.'
-                      : '* 식단에 사용할 큐브를 선택해 주세요.',
+                      : '* 곡류 ➔ 단백질 ➔ 채소 ➔ 과일 순으로 정렬되어 있습니다.',
                   style: TextStyle(fontSize: 11, color: _isFutureDate ? const Color(0xFF267D5E) : Colors.grey.shade600),
                 ),
                 const SizedBox(height: 12),
-                widget.cubes.isEmpty
+                sortedCubes.isEmpty
                     ? const Text('등록된 큐브가 없습니다.')
                     : Column(
-                        children: widget.cubes.map((cube) {
+                        children: sortedCubes.map((cube) {
                           final count = _getSelectedCount(cube);
+                          final emoji = getFoodEmoji(cube.name);
+
                           return Padding(
                             padding: const EdgeInsets.symmetric(vertical: 6),
                             child: Row(
                               children: [
+                                // 이모지 및 카테고리 태그
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: cube.category.bgColor,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    cube.category.label,
+                                    style: TextStyle(color: cube.category.textColor, fontSize: 10, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Row(
                                         children: [
+                                          Text(emoji, style: const TextStyle(fontSize: 15)),
+                                          const SizedBox(width: 4),
                                           Text(
                                             '${cube.name} (${cube.unitWeight}g)',
                                             style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
@@ -1109,7 +1180,7 @@ class _MealLogTabState extends State<MealLogTab> {
                                           if (cube.isPlannedOnly) ...[
                                             const SizedBox(width: 6),
                                             Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                                               decoration: BoxDecoration(
                                                 color: Colors.purple.shade50,
                                                 borderRadius: BorderRadius.circular(4),
@@ -1288,12 +1359,13 @@ class _MealLogTabState extends State<MealLogTab> {
 }
 
 /// ==========================================
-/// (2) 캘린더 화면 (폰트 축소 및 컴팩트 리디자인)
+/// (2) 캘린더 화면 (끼니 순 정렬 & NEW 재료 이모지 배지 탑재)
 /// ==========================================
 enum CalendarViewMode { week, month }
 
 class MealCalendarTab extends StatefulWidget {
   final List<MealLog> mealLogs;
+  final List<CubeItem> cubes;
   final DateTime? birthDate;
   final DateTime? weaningStartDate;
   final Function(MealLog log, MealType newType, DateTime newTime, String newReaction, int newTotalGrams) onEditMeal;
@@ -1303,6 +1375,7 @@ class MealCalendarTab extends StatefulWidget {
   const MealCalendarTab({
     super.key,
     required this.mealLogs,
+    required this.cubes,
     required this.birthDate,
     required this.weaningStartDate,
     required this.onEditMeal,
@@ -1331,10 +1404,46 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
     return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 
+  // 선택 날짜 식단 목록: 끼니 순서(1끼 -> 2끼 -> 3끼 -> 간식) 우선 정렬
   List<MealLog> _getLogsForDate(DateTime date) {
     final list = widget.mealLogs.where((log) => _isSameDay(log.time, date)).toList();
-    list.sort((a, b) => a.time.compareTo(b.time));
+    list.sort((a, b) {
+      final orderCompare = a.mealType.order.compareTo(b.mealType.order);
+      if (orderCompare != 0) return orderCompare;
+      return a.time.compareTo(b.time);
+    });
     return list;
+  }
+
+  // 해당 식단에서 "처음 시도(NEW)"하는 식재료 목록 추출 헬퍼
+  List<String> _getNewIngredientsForLog(MealLog log) {
+    List<String> newItems = [];
+    final currentDay = DateTime(log.time.year, log.time.month, log.time.day);
+
+    // 해당 날짜 이전의 모든 식단 목록
+    final pastLogs = widget.mealLogs.where((l) {
+      final lDay = DateTime(l.time.year, l.time.month, l.time.day);
+      return lDay.isBefore(currentDay);
+    }).toList();
+
+    Set<String> pastUsedCubeIds = {};
+    for (var pl in pastLogs) {
+      pastUsedCubeIds.addAll(pl.cubeUsage.keys);
+    }
+
+    log.cubeUsage.forEach((cubeId, count) {
+      if (!pastUsedCubeIds.contains(cubeId)) {
+        final match = widget.cubes.firstWhere(
+          (c) => c.id == cubeId,
+          orElse: () => CubeItem(id: '', name: '', category: FoodCategory.etc, unitWeight: 0, quantity: 0, madeDate: DateTime.now(), expireDate: DateTime.now()),
+        );
+        if (match.name.isNotEmpty) {
+          newItems.add(match.name);
+        }
+      }
+    });
+
+    return newItems;
   }
 
   void _movePrevious() {
@@ -1535,7 +1644,6 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
       backgroundColor: const Color(0xFFF4F9F6),
       body: Column(
         children: [
-          // 1. 주간/월간 세그먼트 토글
           Container(
             color: Colors.white,
             padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
@@ -1569,8 +1677,6 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
               ),
             ),
           ),
-
-          // 2. 월 이동 바
           Container(
             color: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
@@ -1583,8 +1689,6 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
               ],
             ),
           ),
-
-          // 3. 요일 헤더
           Container(
             color: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 4),
@@ -1606,8 +1710,6 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
               }).toList(),
             ),
           ),
-
-          // 4. 캘린더 그리드
           Container(
             color: Colors.white,
             padding: const EdgeInsets.only(bottom: 8),
@@ -1615,7 +1717,6 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
           ),
           const Divider(height: 1, thickness: 1, color: Color(0xFFEEEEEE)),
 
-          // 5. 선택된 날짜 헤더 (작고 직관적이게)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
             child: Row(
@@ -1626,7 +1727,7 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                     const Icon(Icons.restaurant, color: Color(0xFF3EB489), size: 16),
                     const SizedBox(width: 6),
                     Text(
-                      '${_selectedDate.month}월 ${_selectedDate.day}일 식단',
+                      '${_selectedDate.month}월 ${_selectedDate.day}일 식단 (끼니순)',
                       style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF234E42)),
                     ),
                   ],
@@ -1647,7 +1748,6 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
             ),
           ),
 
-          // 6. 식단 상세 카드 목록 (폰트 축소 & 컴팩트 레이아웃)
           Expanded(
             child: selectedDayLogs.isEmpty
                 ? Center(
@@ -1670,6 +1770,7 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                       final log = selectedDayLogs[i];
                       final timeStr =
                           '${log.time.hour.toString().padLeft(2, '0')}:${log.time.minute.toString().padLeft(2, '0')}';
+                      final newItems = _getNewIngredientsForLog(log);
 
                       return Card(
                         margin: const EdgeInsets.only(bottom: 8),
@@ -1678,7 +1779,10 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                           side: BorderSide(
-                            color: log.isPlanned ? const Color(0xFFA7E9D1) : Colors.grey.shade200,
+                            color: newItems.isNotEmpty
+                                ? const Color(0xFFFFB74D) // 새로운 식재료가 있는 날 강조 테두리
+                                : (log.isPlanned ? const Color(0xFFA7E9D1) : Colors.grey.shade200),
+                            width: newItems.isNotEmpty ? 1.5 : 1.0,
                           ),
                         ),
                         child: Padding(
@@ -1686,7 +1790,7 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // 카드 상단 헤더 (끼니, 시간, 식단 계획 배지, 총량, 수정/삭제)
+                              // 카드 상단 헤더
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
@@ -1766,7 +1870,7 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                                               height: 36,
                                               child: Row(
                                                 children: [
-                                                  Icon(Icons.delete_outline, size: 16, color: Colors.red),
+                                                  Icon(Icons.delete_outline, size: 18, color: Colors.red),
                                                   SizedBox(width: 6),
                                                   Text('삭제', style: TextStyle(color: Colors.red, fontSize: 13)),
                                                 ],
@@ -1779,15 +1883,41 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 5),
 
-                              // 식재료 텍스트 (13px 컴팩트)
+                              // 신규 추가 식재료(처음 먹는 날) 알림 배지 (이모지 포함)
+                              if (newItems.isNotEmpty) ...[
+                                const SizedBox(height: 5),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFFF3E0),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: const Color(0xFFFFCC80)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Text('⚠️ NEW 첫 시도: ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFE65100))),
+                                      ...newItems.map((name) {
+                                        return Padding(
+                                          padding: const EdgeInsets.only(right: 4),
+                                          child: Text(
+                                            '${getFoodEmoji(name)} $name',
+                                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFE65100)),
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ],
+                                  ),
+                                ),
+                              ],
+
+                              const SizedBox(height: 5),
                               Text(
                                 log.ingredients.join(' + '),
                                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87),
                               ),
 
-                              // 메모 영역 (작고 슬림하게)
                               if (log.reaction.isNotEmpty) ...[
                                 const SizedBox(height: 4),
                                 Container(
@@ -1804,7 +1934,6 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                                 ),
                               ],
 
-                              // 계획 식단 완료 버튼 (높이 32px 슬림화)
                               if (log.isPlanned) ...[
                                 const SizedBox(height: 6),
                                 SizedBox(
@@ -2146,6 +2275,7 @@ class _CubeStockTabState extends State<CubeStockTab> {
                         madeDate: selectedMadeDate,
                         expireDate: selectedMadeDate.add(Duration(days: shelfLifeDays)),
                         isPlannedOnly: false,
+                        createdAt: DateTime.now().millisecondsSinceEpoch,
                       ),
                     );
                     Navigator.pop(ctx);
@@ -2364,6 +2494,8 @@ class _CubeStockTabState extends State<CubeStockTab> {
                     itemCount: filtered.length,
                     itemBuilder: (ctx, i) {
                       final cube = filtered[i];
+                      final emoji = getFoodEmoji(cube.name);
+
                       return Card(
                         margin: const EdgeInsets.only(bottom: 12),
                         shape: RoundedRectangleBorder(
@@ -2455,6 +2587,8 @@ class _CubeStockTabState extends State<CubeStockTab> {
                               const SizedBox(height: 4),
                               Row(
                                 children: [
+                                  Text(emoji, style: const TextStyle(fontSize: 22)),
+                                  const SizedBox(width: 8),
                                   Expanded(
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
