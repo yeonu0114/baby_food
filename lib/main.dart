@@ -41,7 +41,7 @@ enum MealType {
   first('1끼', 1, Color(0xFFFF7A59), Color(0xFFFFEFEB)),
   second('2끼', 2, Color(0xFF2E7D32), Color(0xFFE8F5E9)),
   third('3끼', 3, Color(0xFF5E35B1), Color(0xFFEDE7F6)),
-  snack('간식', 4, Color(0xFFF57F17), Color(0xFFFFFDE7)); // 항상 마지막
+  snack('간식', 4, Color(0xFFF57F17), Color(0xFFFFFDE7));
 
   final String label;
   final int order;
@@ -58,7 +58,7 @@ enum MealType {
   }
 }
 
-/// 2. 카테고리 정의 (정렬 우선순위: 곡류 -> 단백질 -> 채소 -> 과일 -> 기타)
+/// 2. 카테고리 정의
 enum FoodCategory {
   grain('곡류', 1, Color(0xFFFFF3CD), Color(0xFF856404)),
   meat('단백질', 2, Color(0xFFF8D7DA), Color(0xFF721C24)),
@@ -119,7 +119,7 @@ class CubeItem {
   DateTime madeDate;
   DateTime expireDate;
   bool isPlannedOnly;
-  int createdAt; // 카테고리 내부 생성 순서 보장용
+  int createdAt;
 
   CubeItem({
     required this.id,
@@ -188,7 +188,7 @@ class MealLog {
   MealType mealType;
   DateTime time;
   List<String> ingredients;
-  Map<String, int> cubeUsage; // cubeId -> count
+  Map<String, int> cubeUsage;
   int totalGrams;
   String reaction;
   bool isPlanned;
@@ -270,7 +270,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           name: '오트밀쌀죽',
           category: FoodCategory.grain,
           unitWeight: 30,
-          quantity: 5,
+          quantity: 6,
           madeDate: now.subtract(const Duration(days: 2)),
           expireDate: now.add(const Duration(days: 5)),
           createdAt: 1000,
@@ -280,9 +280,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           name: '소고기 안심',
           category: FoodCategory.meat,
           unitWeight: 10,
-          quantity: 2,
-          madeDate: now.subtract(const Duration(days: 4)),
-          expireDate: now.add(const Duration(days: 3)),
+          quantity: 3,
+          madeDate: now.subtract(const Duration(days: 3)),
+          expireDate: now.add(const Duration(days: 4)),
           createdAt: 2000,
         ),
         CubeItem(
@@ -290,7 +290,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           name: '단호박',
           category: FoodCategory.vegetable,
           unitWeight: 15,
-          quantity: 2,
+          quantity: 3,
           madeDate: now.subtract(const Duration(days: 1)),
           expireDate: now.add(const Duration(days: 6)),
           createdAt: 3000,
@@ -476,23 +476,23 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('${cube.name} 큐브 ${addedQty}개 제작 완료! (보관함에 실물 등록됨)'),
+        content: Text('${cube.name} 큐브 ${addedQty}개 보충 완료! (보관함에 실물 등록됨)'),
         backgroundColor: const Color(0xFF3EB489),
       ),
     );
   }
 
+  // 원하는 기간(N일간) 연속 동일 식단 일괄 저장 로직
   void _addMealRecord({
     required MealType mealType,
-    required DateTime recordDate,
+    required DateTime startDate,
+    required int repeatDays,
     required Map<CubeItem, int> selectedCubes,
     required String reaction,
   }) {
     setState(() {
       final now = DateTime.now();
       final todayMidnight = DateTime(now.year, now.month, now.day);
-      final recordMidnight = DateTime(recordDate.year, recordDate.month, recordDate.day);
-      final isFuturePlan = recordMidnight.isAfter(todayMidnight);
 
       List<String> ingredientSummaries = [];
       Map<String, int> cubeUsageMap = {};
@@ -500,9 +500,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
       selectedCubes.forEach((cube, count) {
         if (count > 0) {
-          if (!isFuturePlan && !cube.isPlannedOnly) {
-            cube.quantity = (cube.quantity - count).clamp(0, 999);
-          }
           final weight = cube.unitWeight * count;
           totalWeight += weight;
           ingredientSummaries.add('${cube.name} ${weight}g (${count}개)');
@@ -510,28 +507,50 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         }
       });
 
-      _mealLogs.insert(
-        0,
-        MealLog(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          mealType: mealType,
-          time: recordDate,
-          ingredients: ingredientSummaries,
-          cubeUsage: cubeUsageMap,
-          totalGrams: totalWeight,
-          reaction: reaction.isEmpty
-              ? (isFuturePlan ? '[예정] 식단 계획' : '특이사항 없음')
-              : reaction,
-          isPlanned: isFuturePlan,
-        ),
-      );
+      // 선택한 반복 일수(repeatDays)만큼 루프 돌며 각각의 날짜에 식단 등록
+      for (int i = 0; i < repeatDays; i++) {
+        final currentDate = startDate.add(Duration(days: i));
+        final recordMidnight = DateTime(currentDate.year, currentDate.month, currentDate.day);
+        final isFuturePlan = recordMidnight.isAfter(todayMidnight);
+
+        // 당일 식단이고 1일 단일 등록인 경우에만 실물 즉시 차감
+        if (!isFuturePlan && repeatDays == 1) {
+          selectedCubes.forEach((cube, count) {
+            if (!cube.isPlannedOnly && count > 0) {
+              cube.quantity = (cube.quantity - count).clamp(0, 999);
+            }
+          });
+        }
+
+        final memoText = reaction.isEmpty
+            ? (repeatDays > 1 ? '[${i + 1}/$repeatDays일차 계획]' : (isFuturePlan ? '[예정] 식단 계획' : '특이사항 없음'))
+            : (repeatDays > 1 ? '[$repeatDays일 연속] $reaction' : reaction);
+
+        _mealLogs.insert(
+          0,
+          MealLog(
+            id: '${DateTime.now().millisecondsSinceEpoch}_$i',
+            mealType: mealType,
+            time: currentDate,
+            ingredients: List.from(ingredientSummaries),
+            cubeUsage: Map.from(cubeUsageMap),
+            totalGrams: totalWeight,
+            reaction: memoText,
+            isPlanned: isFuturePlan || repeatDays > 1, // 연속 식단 플랜은 '식사 완료'로 차감되도록 계획 상태로 설정
+          ),
+        );
+      }
     });
     _saveData();
 
-    final timeFormatted = '${recordDate.hour.toString().padLeft(2, '0')}:${recordDate.minute.toString().padLeft(2, '0')}';
+    final endDay = startDate.add(Duration(days: repeatDays - 1));
+    final msg = repeatDays > 1
+        ? '${startDate.month}/${startDate.day} ~ ${endDay.month}/${endDay.day} ($repeatDays일간) [${mealType.label}] 식단 계획 일괄 등록 완료!'
+        : '${startDate.month}/${startDate.day} [${mealType.label}] 저장 완료!';
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('${recordDate.month}월 ${recordDate.day}일 $timeFormatted [${mealType.label}] 저장 완료!'),
+        content: Text(msg),
         backgroundColor: const Color(0xFF3EB489),
       ),
     );
@@ -548,8 +567,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       });
 
       log.isPlanned = false;
-      if (log.reaction.startsWith('[예정]')) {
-        log.reaction = '완식 (계획 식사 완료)';
+      if (log.reaction.startsWith('[예정]') || log.reaction.contains('계획')) {
+        log.reaction = '완식 (식사 완료)';
       }
     });
     _saveData();
@@ -730,7 +749,7 @@ String calculateDdayString(DateTime targetDate, DateTime? birthDate, DateTime? w
 }
 
 /// ==========================================
-/// (1) 식단 기록 화면 (곡류-단백질-채소-과일-기타 정렬 적용)
+/// (1) 식단 기록 화면 (연속 동일 식단 일괄 저장 탑재)
 /// ==========================================
 class MealLogTab extends StatefulWidget {
   final List<CubeItem> cubes;
@@ -738,7 +757,8 @@ class MealLogTab extends StatefulWidget {
   final DateTime? weaningStartDate;
   final Function({
     required MealType mealType,
-    required DateTime recordDate,
+    required DateTime startDate,
+    required int repeatDays,
     required Map<CubeItem, int> selectedCubes,
     required String reaction,
   }) onSaveMeal;
@@ -761,6 +781,8 @@ class _MealLogTabState extends State<MealLogTab> {
   DateTime _selectedDate = DateTime.now();
   TimeOfDay _selectedTime = TimeOfDay.now();
   MealType _selectedMealType = MealType.first;
+  int _repeatDays = 1; // 1일(단일), 2일, 3일 연속 등
+
   final Map<String, int> _selectedQuantities = {};
   final TextEditingController _reactionController = TextEditingController();
 
@@ -930,7 +952,8 @@ class _MealLogTabState extends State<MealLogTab> {
 
     widget.onSaveMeal(
       mealType: _selectedMealType,
-      recordDate: combinedDateTime,
+      startDate: combinedDateTime,
+      repeatDays: _repeatDays,
       selectedCubes: cubesToApply,
       reaction: _reactionController.text.trim(),
     );
@@ -939,6 +962,7 @@ class _MealLogTabState extends State<MealLogTab> {
       _selectedQuantities.clear();
       _reactionController.clear();
       _activeTags.clear();
+      _repeatDays = 1; // 저장 후 단일 1일로 리셋
     });
   }
 
@@ -959,13 +983,14 @@ class _MealLogTabState extends State<MealLogTab> {
 
     final ddaySummary = calculateDdayString(_selectedDate, widget.birthDate, widget.weaningStartDate);
 
-    // 식재료 정렬 로직: 곡류(1) -> 단백질(2) -> 채소(3) -> 과일(4) -> 기타(5), 카테고리 내에서는 등록 순서 유지
     final sortedCubes = List<CubeItem>.from(widget.cubes)
       ..sort((a, b) {
         final catCompare = a.category.sortOrder.compareTo(b.category.sortOrder);
         if (catCompare != 0) return catCompare;
         return a.createdAt.compareTo(b.createdAt);
       });
+
+    final endDate = _selectedDate.add(Duration(days: _repeatDays - 1));
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -1001,18 +1026,22 @@ class _MealLogTabState extends State<MealLogTab> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            isToday
-                                ? '오늘 식단 기록'
-                                : (_isFutureDate ? '향후 식단 계획 (미래)' : '이전 날짜 소급 기록 (과거)'),
+                            _repeatDays > 1
+                                ? '$_repeatDays일 연속 동일 식단 플랜'
+                                : (isToday ? '오늘 식단 기록' : (_isFutureDate ? '향후 식단 계획 (미래)' : '이전 날짜 소급 기록 (과거)')),
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
-                              color: _isFutureDate ? const Color(0xFF267D5E) : Colors.grey.shade600,
+                              color: _repeatDays > 1
+                                  ? const Color(0xFF3EB489)
+                                  : (_isFutureDate ? const Color(0xFF267D5E) : Colors.grey.shade600),
                             ),
                           ),
                           Text(
-                            '${_selectedDate.year}년 ${_selectedDate.month}월 ${_selectedDate.day}일',
-                            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF234E42)),
+                            _repeatDays > 1
+                                ? '${_selectedDate.month}/${_selectedDate.day} ~ ${endDate.month}/${endDate.day} ($_repeatDays일간)'
+                                : '${_selectedDate.year}년 ${_selectedDate.month}월 ${_selectedDate.day}일',
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF234E42)),
                           ),
                         ],
                       ),
@@ -1020,7 +1049,7 @@ class _MealLogTabState extends State<MealLogTab> {
                     OutlinedButton.icon(
                       onPressed: _pickDate,
                       icon: const Icon(Icons.edit_calendar, size: 14),
-                      label: const Text('날짜 변경'),
+                      label: const Text('시작일 변경'),
                       style: OutlinedButton.styleFrom(
                         visualDensity: VisualDensity.compact,
                         foregroundColor: const Color(0xFF3EB489),
@@ -1029,7 +1058,7 @@ class _MealLogTabState extends State<MealLogTab> {
                     ),
                   ],
                 ),
-                if (ddaySummary.isNotEmpty) ...[
+                if (ddaySummary.isNotEmpty && _repeatDays == 1) ...[
                   const SizedBox(height: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -1055,13 +1084,47 @@ class _MealLogTabState extends State<MealLogTab> {
                   ),
                 ],
                 const Divider(height: 18, thickness: 0.5),
+
+                // 연속 반복 일수 설정 버튼 (신규 기능: 1일/2일/3일 테스트용)
+                Row(
+                  children: [
+                    const Icon(Icons.repeat, color: Color(0xFF3EB489), size: 18),
+                    const SizedBox(width: 8),
+                    const Text('식단 적용 기간: ', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF234E42))),
+                    const SizedBox(width: 6),
+                    Wrap(
+                      spacing: 6,
+                      children: [1, 2, 3, 4, 5].map((d) {
+                        final isSel = _repeatDays == d;
+                        return ChoiceChip(
+                          label: Text(d == 1 ? '1일' : '$d일간${d == 3 ? ' (추천)' : ''}'),
+                          labelStyle: TextStyle(
+                            fontSize: 11,
+                            fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                            color: isSel ? Colors.white : const Color(0xFF234E42),
+                          ),
+                          selected: isSel,
+                          selectedColor: const Color(0xFF3EB489),
+                          backgroundColor: const Color(0xFFF1F3F5),
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          visualDensity: VisualDensity.compact,
+                          onSelected: (val) {
+                            if (val) setState(() => _repeatDays = d);
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
+
+                const Divider(height: 18, thickness: 0.5),
                 Row(
                   children: [
                     const Icon(Icons.access_time, color: Colors.blueGrey, size: 18),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        '식사 시간: $hourStr:$minuteStr',
+                        '매 끼니 시간: $hourStr:$minuteStr',
                         style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                       ),
                     ),
@@ -1112,7 +1175,7 @@ class _MealLogTabState extends State<MealLogTab> {
           ),
           const SizedBox(height: 16),
 
-          // 3. 토핑 큐브 선택 카드 (곡류-단백질-채소-과일-기타 순 나열)
+          // 3. 토핑 큐브 선택 카드
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -1126,19 +1189,23 @@ class _MealLogTabState extends State<MealLogTab> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('토핑 큐브 담기 (분류순)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF234E42))),
+                    const Text('토핑 큐브 담기 (1끼 기준)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF234E42))),
                     Text(
-                      '총합: $currentTotalGrams g',
+                      '1회 총합: $currentTotalGrams g',
                       style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF3EB489)),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  _isFutureDate
-                      ? '* 새로운 재료는 아래 [+ 미등록 재료 직접 추가]로 담으면 제작 알림이 뜹니다.'
+                  _repeatDays > 1
+                      ? '* 선택한 식단이 시작일로부터 $_repeatDays일 동안 매일 자동으로 캘린더에 배정됩니다.'
                       : '* 곡류 ➔ 단백질 ➔ 채소 ➔ 과일 순으로 정렬되어 있습니다.',
-                  style: TextStyle(fontSize: 11, color: _isFutureDate ? const Color(0xFF267D5E) : Colors.grey.shade600),
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: _repeatDays > 1 ? const Color(0xFF3EB489) : Colors.grey.shade600,
+                    fontWeight: _repeatDays > 1 ? FontWeight.bold : FontWeight.normal,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 sortedCubes.isEmpty
@@ -1152,7 +1219,6 @@ class _MealLogTabState extends State<MealLogTab> {
                             padding: const EdgeInsets.symmetric(vertical: 6),
                             child: Row(
                               children: [
-                                // 이모지 및 카테고리 태그
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
@@ -1237,8 +1303,8 @@ class _MealLogTabState extends State<MealLogTab> {
           ),
           const SizedBox(height: 16),
 
-          // 4. 빠른 반응 체크
-          if (!_isFutureDate) ...[
+          // 4. 빠른 반응 체크 (1일 단일 등록일 때만 활성화)
+          if (!_isFutureDate && _repeatDays == 1) ...[
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -1274,8 +1340,8 @@ class _MealLogTabState extends State<MealLogTab> {
           TextField(
             controller: _reactionController,
             decoration: InputDecoration(
-              labelText: _isFutureDate ? '식단 계획 메모 (선택)' : '아기 반응 / 추가 메모',
-              hintText: _isFutureDate ? '예: 새로운 채소 테스트 예정' : '위 버튼을 터치하거나 직접 작성하세요',
+              labelText: _repeatDays > 1 ? '연속 식단 공통 메모 (예: 3일간 비트 알레르기 테스트)' : '아기 반응 / 식단 계획 메모',
+              hintText: _repeatDays > 1 ? '예: 3일 연속 새로운 재료 반응 관찰' : '위 버튼을 터치하거나 직접 작성하세요',
               filled: true,
               fillColor: Colors.white,
               border: OutlineInputBorder(
@@ -1302,13 +1368,15 @@ class _MealLogTabState extends State<MealLogTab> {
             height: 50,
             child: ElevatedButton.icon(
               onPressed: _submitMeal,
-              icon: Icon(_isFutureDate ? Icons.event_available : Icons.check),
+              icon: Icon(_repeatDays > 1 || _isFutureDate ? Icons.event_repeat : Icons.check),
               label: Text(
-                _isFutureDate ? '[${_selectedMealType.label}] 계획 저장하기' : '[${_selectedMealType.label}] 기록 완료 & 큐브 차감',
+                _repeatDays > 1
+                    ? '$_repeatDays일 연속 [${_selectedMealType.label}] 일괄 저장하기'
+                    : (_isFutureDate ? '[${_selectedMealType.label}] 계획 저장하기' : '[${_selectedMealType.label}] 기록 완료 & 큐브 차감'),
                 style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
               ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: _isFutureDate ? const Color(0xFF3EB489) : _selectedMealType.primaryColor,
+                backgroundColor: const Color(0xFF3EB489),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
@@ -1404,7 +1472,6 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
     return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 
-  // 선택 날짜 식단 목록: 끼니 순서(1끼 -> 2끼 -> 3끼 -> 간식) 우선 정렬
   List<MealLog> _getLogsForDate(DateTime date) {
     final list = widget.mealLogs.where((log) => _isSameDay(log.time, date)).toList();
     list.sort((a, b) {
@@ -1415,12 +1482,10 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
     return list;
   }
 
-  // 해당 식단에서 "처음 시도(NEW)"하는 식재료 목록 추출 헬퍼
   List<String> _getNewIngredientsForLog(MealLog log) {
     List<String> newItems = [];
     final currentDay = DateTime(log.time.year, log.time.month, log.time.day);
 
-    // 해당 날짜 이전의 모든 식단 목록
     final pastLogs = widget.mealLogs.where((l) {
       final lDay = DateTime(l.time.year, l.time.month, l.time.day);
       return lDay.isBefore(currentDay);
@@ -1780,7 +1845,7 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                           borderRadius: BorderRadius.circular(12),
                           side: BorderSide(
                             color: newItems.isNotEmpty
-                                ? const Color(0xFFFFB74D) // 새로운 식재료가 있는 날 강조 테두리
+                                ? const Color(0xFFFFB74D)
                                 : (log.isPlanned ? const Color(0xFFA7E9D1) : Colors.grey.shade200),
                             width: newItems.isNotEmpty ? 1.5 : 1.0,
                           ),
@@ -1790,7 +1855,6 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // 카드 상단 헤더
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
@@ -1884,7 +1948,6 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                                 ],
                               ),
 
-                              // 신규 추가 식재료(처음 먹는 날) 알림 배지 (이모지 포함)
                               if (newItems.isNotEmpty) ...[
                                 const SizedBox(height: 5),
                                 Container(
