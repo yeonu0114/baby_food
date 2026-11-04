@@ -761,7 +761,7 @@ String calculateDdayString(DateTime targetDate, DateTime? birthDate, DateTime? w
 }
 
 /// ==========================================
-/// (1) 식단 기록 화면 (범위 달력 기간 선택기 탑재)
+/// (1) 식단 기록 화면 (글자 잘림 방지 스타일 적용)
 /// ==========================================
 class MealLogTab extends StatefulWidget {
   final List<CubeItem> cubes;
@@ -842,7 +842,6 @@ class _MealLogTabState extends State<MealLogTab> {
     });
   }
 
-  // 달력 기간 선택기 (시작일 ~ 종료일 드래그/선택)
   Future<void> _pickDateRange() async {
     final pickedRange = await showDateRangePicker(
       context: context,
@@ -872,14 +871,12 @@ class _MealLogTabState extends State<MealLogTab> {
     }
   }
 
-  // 퀵 버튼: 3일 테스트 범위로 자동 확장
   void _setThreeDaysRange() {
     setState(() {
       _endDate = _startDate.add(const Duration(days: 2));
     });
   }
 
-  // 퀵 버튼: 단 하루(1일)로 리셋
   void _setSingleDay() {
     setState(() {
       _endDate = _startDate;
@@ -1012,7 +1009,7 @@ class _MealLogTabState extends State<MealLogTab> {
       _selectedQuantities.clear();
       _reactionController.clear();
       _activeTags.clear();
-      _endDate = _startDate; // 저장 후 1일로 리셋
+      _endDate = _startDate;
     });
   }
 
@@ -1045,7 +1042,7 @@ class _MealLogTabState extends State<MealLogTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. 달력 기간 선택기 연동 리디자인 카드
+          // 1. 달력 기간 선택기 연동 카드
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -1061,7 +1058,6 @@ class _MealLogTabState extends State<MealLogTab> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // (1) 날짜 범위 안내 헤더
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1090,12 +1086,11 @@ class _MealLogTabState extends State<MealLogTab> {
                             _repeatDays > 1
                                 ? '${_startDate.month}/${_startDate.day} ~ ${_endDate.month}/${_endDate.day} ($_repeatDays일간)'
                                 : '${_startDate.year}년 ${_startDate.month}월 ${_startDate.day}일',
-                            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Color(0xFF234E42)),
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF234E42)),
                           ),
                         ],
                       ),
                     ),
-                    // 기간 달력 호출 버튼
                     ElevatedButton.icon(
                       onPressed: _pickDateRange,
                       icon: const Icon(Icons.calendar_month, size: 15),
@@ -1112,42 +1107,48 @@ class _MealLogTabState extends State<MealLogTab> {
                   ],
                 ),
 
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
 
-                // (2) 퀵 토글 칩: [단 하루] | [3일 테스트]
+                // (1) 빠른 설정: 글자 잘림 완벽 해결 (여백 확보 및 줄바꿈 방지)
                 Row(
                   children: [
-                    Text('빠른 설정: ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey.shade600)),
-                    const SizedBox(width: 6),
+                    Text('빠른 설정: ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+                    const SizedBox(width: 8),
                     ActionChip(
-                      label: const Text('하루만', style: TextStyle(fontSize: 11)),
-                      backgroundColor: _repeatDays == 1 ? const Color(0xFF3EB489) : const Color(0xFFF1F3F5),
+                      label: const Text('하루만'),
                       labelStyle: TextStyle(
+                        fontSize: 12,
+                        height: 1.1,
                         color: _repeatDays == 1 ? Colors.white : Colors.black87,
-                        fontWeight: _repeatDays == 1 ? FontWeight.bold : FontWeight.normal,
+                        fontWeight: _repeatDays == 1 ? FontWeight.bold : FontWeight.w500,
                       ),
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      visualDensity: VisualDensity.compact,
+                      backgroundColor: _repeatDays == 1 ? const Color(0xFF3EB489) : const Color(0xFFF1F3F5),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      side: BorderSide(color: _repeatDays == 1 ? const Color(0xFF3EB489) : Colors.grey.shade300),
                       onPressed: _setSingleDay,
                     ),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 8),
                     ActionChip(
-                      avatar: const Icon(Icons.flash_on, size: 14, color: Colors.amber),
-                      label: const Text('3일 테스트', style: TextStyle(fontSize: 11)),
-                      backgroundColor: _repeatDays == 3 ? const Color(0xFF3EB489) : const Color(0xFFF1F3F5),
+                      avatar: Icon(Icons.flash_on, size: 14, color: _repeatDays == 3 ? Colors.white : Colors.amber.shade800),
+                      label: const Text('3일 테스트'),
                       labelStyle: TextStyle(
+                        fontSize: 12,
+                        height: 1.1,
                         color: _repeatDays == 3 ? Colors.white : Colors.black87,
-                        fontWeight: _repeatDays == 3 ? FontWeight.bold : FontWeight.normal,
+                        fontWeight: _repeatDays == 3 ? FontWeight.bold : FontWeight.w500,
                       ),
-                      padding: const EdgeInsets.symmetric(horizontal: 6),
-                      visualDensity: VisualDensity.compact,
+                      backgroundColor: _repeatDays == 3 ? const Color(0xFF3EB489) : const Color(0xFFF1F3F5),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      side: BorderSide(color: _repeatDays == 3 ? const Color(0xFF3EB489) : Colors.grey.shade300),
                       onPressed: _setThreeDaysRange,
                     ),
                   ],
                 ),
 
                 if (ddaySummary.isNotEmpty && _repeatDays == 1) ...[
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
@@ -1172,9 +1173,9 @@ class _MealLogTabState extends State<MealLogTab> {
                   ),
                 ],
 
-                const Divider(height: 20, thickness: 0.5),
+                const Divider(height: 22, thickness: 0.5),
 
-                // (3) 식사 시간
+                // 식사 시간
                 Row(
                   children: [
                     const Icon(Icons.access_time, color: Colors.blueGrey, size: 18),
@@ -1202,7 +1203,7 @@ class _MealLogTabState extends State<MealLogTab> {
           ),
           const SizedBox(height: 16),
 
-          // 2. 끼니 차수 선택
+          // 2. 끼니 차수 선택: 글자 잘림 완벽 해결 (1끼, 2끼, 3끼, 간식)
           const Text('끼니 선택', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF234E42))),
           const SizedBox(height: 8),
           Row(
@@ -1214,12 +1215,16 @@ class _MealLogTabState extends State<MealLogTab> {
                   label: Text(m.label),
                   labelStyle: TextStyle(
                     fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    height: 1.1,
                     color: isSelected ? Colors.white : m.primaryColor,
                   ),
                   selected: isSelected,
-                  checkmarkColor: Colors.white,
+                  showCheckmark: false,
                   backgroundColor: m.bgColor,
                   selectedColor: m.primaryColor,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   side: BorderSide(
                     color: isSelected ? m.primaryColor : m.primaryColor.withOpacity(0.3),
                   ),
@@ -1461,6 +1466,7 @@ class _MealLogTabState extends State<MealLogTab> {
               label: Text(tag),
               labelStyle: TextStyle(
                 fontSize: 12,
+                height: 1.1,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                 color: isSelected ? Colors.white : Colors.black87,
               ),
@@ -1471,7 +1477,7 @@ class _MealLogTabState extends State<MealLogTab> {
               side: BorderSide(
                 color: isSelected ? accentColor : Colors.grey.shade300,
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               onSelected: (_) => _toggleTag(tag),
             );
@@ -1483,7 +1489,7 @@ class _MealLogTabState extends State<MealLogTab> {
 }
 
 /// ==========================================
-/// (2) 캘린더 화면
+/// (2) 캘린더 화면 (토글 중앙 정렬 및 '주간/월간' 간소화)
 /// ==========================================
 enum CalendarViewMode { week, month }
 
@@ -1875,39 +1881,45 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
       backgroundColor: const Color(0xFFF4F9F6),
       body: Column(
         children: [
+          // (2) 캘린더 화면 보기 방식: 완벽한 중앙 정렬 및 '주간' / '월간' 간소화
           Container(
             color: Colors.white,
-            padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            alignment: Alignment.center,
             child: SizedBox(
               width: double.infinity,
-              height: 40,
-              child: SegmentedButton<CalendarViewMode>(
-                segments: const [
-                  ButtonSegment<CalendarViewMode>(
-                    value: CalendarViewMode.week,
-                    label: Text('주간 뷰', style: TextStyle(fontSize: 12)),
-                    icon: Icon(Icons.view_week_outlined, size: 16),
+              height: 38,
+              child: Center(
+                child: SegmentedButton<CalendarViewMode>(
+                  segments: const [
+                    ButtonSegment<CalendarViewMode>(
+                      value: CalendarViewMode.week,
+                      label: Text('주간', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                      icon: Icon(Icons.view_week_outlined, size: 16),
+                    ),
+                    ButtonSegment<CalendarViewMode>(
+                      value: CalendarViewMode.month,
+                      label: Text('월간', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                      icon: Icon(Icons.calendar_view_month, size: 16),
+                    ),
+                  ],
+                  selected: {_viewMode},
+                  onSelectionChanged: (newSelection) {
+                    setState(() {
+                      _viewMode = newSelection.first;
+                      _focusedDate = _selectedDate;
+                    });
+                  },
+                  style: SegmentedButton.styleFrom(
+                    selectedBackgroundColor: const Color(0xFFE8F8F2),
+                    selectedForegroundColor: const Color(0xFF3EB489),
+                    visualDensity: VisualDensity.compact,
                   ),
-                  ButtonSegment<CalendarViewMode>(
-                    value: CalendarViewMode.month,
-                    label: Text('월간 뷰', style: TextStyle(fontSize: 12)),
-                    icon: Icon(Icons.calendar_view_month, size: 16),
-                  ),
-                ],
-                selected: {_viewMode},
-                onSelectionChanged: (newSelection) {
-                  setState(() {
-                    _viewMode = newSelection.first;
-                    _focusedDate = _selectedDate;
-                  });
-                },
-                style: SegmentedButton.styleFrom(
-                  selectedBackgroundColor: const Color(0xFFE8F8F2),
-                  selectedForegroundColor: const Color(0xFF3EB489),
                 ),
               ),
             ),
           ),
+
           Container(
             color: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
@@ -1920,6 +1932,7 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
               ],
             ),
           ),
+
           Container(
             color: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 4),
@@ -1941,6 +1954,7 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
               }).toList(),
             ),
           ),
+
           Container(
             color: Colors.white,
             padding: const EdgeInsets.only(bottom: 8),
@@ -2400,7 +2414,7 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
 }
 
 /// ==========================================
-/// (3) 큐브 보관함 화면
+/// (3) 큐브 보관함 화면 (카테고리 칩 글자 잘림 완벽 해결)
 /// ==========================================
 class CubeStockTab extends StatefulWidget {
   final List<CubeItem> cubes;
@@ -2718,16 +2732,30 @@ class _CubeStockTabState extends State<CubeStockTab> {
       backgroundColor: const Color(0xFFF4F9F6),
       body: Column(
         children: [
+          // (3) 보관함 탭 카테고리 칩: 글자 잘림 완벽 해결 (전체, 곡류, 단백질, 채소, 과일, 기타)
           SizedBox(
-            height: 48,
+            height: 52,
             child: ListView(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               children: [
                 FilterChip(
                   label: const Text('전체'),
+                  labelStyle: TextStyle(
+                    fontSize: 13,
+                    height: 1.1,
+                    fontWeight: _selectedCategory == null ? FontWeight.bold : FontWeight.normal,
+                    color: _selectedCategory == null ? const Color(0xFF234E42) : Colors.black87,
+                  ),
                   selected: _selectedCategory == null,
+                  showCheckmark: false,
                   selectedColor: const Color(0xFFE8F8F2),
+                  backgroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  side: BorderSide(
+                    color: _selectedCategory == null ? const Color(0xFF3EB489) : Colors.grey.shade300,
+                  ),
                   onSelected: (_) => setState(() => _selectedCategory = null),
                 ),
                 const SizedBox(width: 8),
@@ -2736,8 +2764,21 @@ class _CubeStockTabState extends State<CubeStockTab> {
                     padding: const EdgeInsets.only(right: 8),
                     child: FilterChip(
                       label: Text(cat.label),
+                      labelStyle: TextStyle(
+                        fontSize: 13,
+                        height: 1.1,
+                        fontWeight: _selectedCategory == cat ? FontWeight.bold : FontWeight.normal,
+                        color: _selectedCategory == cat ? const Color(0xFF234E42) : Colors.black87,
+                      ),
                       selected: _selectedCategory == cat,
+                      showCheckmark: false,
                       selectedColor: const Color(0xFFE8F8F2),
+                      backgroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      side: BorderSide(
+                        color: _selectedCategory == cat ? const Color(0xFF3EB489) : Colors.grey.shade300,
+                      ),
                       onSelected: (val) => setState(() => _selectedCategory = val ? cat : null),
                     ),
                   ),
@@ -2745,7 +2786,7 @@ class _CubeStockTabState extends State<CubeStockTab> {
               ],
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Expanded(
             child: filtered.isEmpty
                 ? const Center(
