@@ -36,7 +36,7 @@ class BabyFoodApp extends StatelessWidget {
   }
 }
 
-/// 1. 끼니 차수 정의 및 순서 정렬 가중치(order)
+/// 1. 끼니 차수 정의 및 순서
 enum MealType {
   first('1끼', 1, Color(0xFFFF7A59), Color(0xFFFFEFEB)),
   second('2끼', 2, Color(0xFF2E7D32), Color(0xFFE8F5E9)),
@@ -84,7 +84,7 @@ enum FoodCategory {
 /// 식재료명 기반 이모지 매퍼 함수
 String getFoodEmoji(String name) {
   final cleanName = name.trim().toLowerCase();
-  if (cleanName.contains('쌀') || cleanName.contains('오트밀') || cleanName.contains('보리') || cleanName.contains('퀴노아')) return '🌾';
+  if (cleanName.contains('쌀') || cleanName.contains('오트밀') || cleanName.contains('보리') || cleanName.contains('퀴노아') || cleanName.contains('현미')) return '🌾';
   if (cleanName.contains('소고기') || cleanName.contains('안심') || cleanName.contains('우둔')) return '🥩';
   if (cleanName.contains('닭') || cleanName.contains('닭가슴살') || cleanName.contains('닭안심')) return '🍗';
   if (cleanName.contains('돼지')) return '🥓';
@@ -102,7 +102,7 @@ String getFoodEmoji(String name) {
   if (cleanName.contains('아보카도')) return '🥑';
   if (cleanName.contains('치즈')) return '🧀';
   if (cleanName.contains('계란') || cleanName.contains('달걀') || cleanName.contains('노른자')) return '🥚';
-  if (cleanName.contains('두부') || cleanName.contains('콩')) return '🫘';
+  if (cleanName.contains('두부') || cleanName.contains('콩') || cleanName.contains('완두콩')) return '🫘';
   if (cleanName.contains('버섯')) return '🍄';
   if (cleanName.contains('토마토')) return '🍅';
   if (cleanName.contains('비트')) return '🫐';
@@ -285,16 +285,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           expireDate: now.add(const Duration(days: 4)),
           createdAt: 2000,
         ),
-        CubeItem(
-          id: '3',
-          name: '단호박',
-          category: FoodCategory.vegetable,
-          unitWeight: 15,
-          quantity: 3,
-          madeDate: now.subtract(const Duration(days: 1)),
-          expireDate: now.add(const Duration(days: 6)),
-          createdAt: 3000,
-        ),
       ];
     }
 
@@ -476,7 +466,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('${cube.name} 큐브 ${addedQty}개 보충 완료! (보관함에 실물 등록됨)'),
+        content: Text('${cube.name} 큐브 ${addedQty}개 보충 완료!'),
         backgroundColor: const Color(0xFF3EB489),
       ),
     );
@@ -542,7 +532,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
     final endDay = startDate.add(Duration(days: repeatDays - 1));
     final msg = repeatDays > 1
-        ? '${startDate.month}/${startDate.day} ~ ${endDay.month}/${endDay.day} ($repeatDays일간) [${mealType.label}] 식단 계획 일괄 등록 완료!'
+        ? '${startDate.month}/${startDate.day} ~ ${endDay.month}/${endDay.day} ($repeatDays일간) [${mealType.label}] 계획 등록 완료!'
         : '${startDate.month}/${startDate.day} [${mealType.label}] 저장 완료!';
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -761,7 +751,7 @@ String calculateDdayString(DateTime targetDate, DateTime? birthDate, DateTime? w
 }
 
 /// ==========================================
-/// (1) 식단 기록 화면 (글자 잘림 방지 스타일 적용)
+/// (1) 식단 기록 화면 (커스텀 버튼으로 글자 잘림 완벽 해결)
 /// ==========================================
 class MealLogTab extends StatefulWidget {
   final List<CubeItem> cubes;
@@ -1042,7 +1032,7 @@ class _MealLogTabState extends State<MealLogTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. 달력 기간 선택기 연동 카드
+          // 1. 날짜 범위 선택 카드
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -1100,57 +1090,81 @@ class _MealLogTabState extends State<MealLogTab> {
                         foregroundColor: const Color(0xFF234E42),
                         elevation: 0,
                         visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),
                     ),
                   ],
                 ),
 
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
 
-                // (1) 빠른 설정: 글자 잘림 완벽 해결 (여백 확보 및 줄바꿈 방지)
+                // (1) 빠른 설정 버튼: Chip 제거 및 커스텀 컨테이너로 글자 잘림 완벽 해결
                 Row(
                   children: [
                     Text('빠른 설정: ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
                     const SizedBox(width: 8),
-                    ActionChip(
-                      label: const Text('하루만'),
-                      labelStyle: TextStyle(
-                        fontSize: 12,
-                        height: 1.1,
-                        color: _repeatDays == 1 ? Colors.white : Colors.black87,
-                        fontWeight: _repeatDays == 1 ? FontWeight.bold : FontWeight.w500,
+                    // '하루만' 버튼
+                    InkWell(
+                      onTap: _setSingleDay,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: _repeatDays == 1 ? const Color(0xFF3EB489) : const Color(0xFFF1F3F5),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: _repeatDays == 1 ? const Color(0xFF3EB489) : Colors.grey.shade300,
+                          ),
+                        ),
+                        child: Text(
+                          '하루만',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: _repeatDays == 1 ? FontWeight.bold : FontWeight.w500,
+                            color: _repeatDays == 1 ? Colors.white : Colors.black87,
+                          ),
+                        ),
                       ),
-                      backgroundColor: _repeatDays == 1 ? const Color(0xFF3EB489) : const Color(0xFFF1F3F5),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      side: BorderSide(color: _repeatDays == 1 ? const Color(0xFF3EB489) : Colors.grey.shade300),
-                      onPressed: _setSingleDay,
                     ),
                     const SizedBox(width: 8),
-                    ActionChip(
-                      avatar: Icon(Icons.flash_on, size: 14, color: _repeatDays == 3 ? Colors.white : Colors.amber.shade800),
-                      label: const Text('3일 테스트'),
-                      labelStyle: TextStyle(
-                        fontSize: 12,
-                        height: 1.1,
-                        color: _repeatDays == 3 ? Colors.white : Colors.black87,
-                        fontWeight: _repeatDays == 3 ? FontWeight.bold : FontWeight.w500,
+                    // '3일 테스트' 버튼
+                    InkWell(
+                      onTap: _setThreeDaysRange,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: _repeatDays == 3 ? const Color(0xFF3EB489) : const Color(0xFFF1F3F5),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: _repeatDays == 3 ? const Color(0xFF3EB489) : Colors.grey.shade300,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.flash_on, size: 14, color: _repeatDays == 3 ? Colors.white : Colors.amber.shade800),
+                            const SizedBox(width: 4),
+                            Text(
+                              '3일 테스트',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: _repeatDays == 3 ? FontWeight.bold : FontWeight.w500,
+                                color: _repeatDays == 3 ? Colors.white : Colors.black87,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      backgroundColor: _repeatDays == 3 ? const Color(0xFF3EB489) : const Color(0xFFF1F3F5),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      side: BorderSide(color: _repeatDays == 3 ? const Color(0xFF3EB489) : Colors.grey.shade300),
-                      onPressed: _setThreeDaysRange,
                     ),
                   ],
                 ),
 
                 if (ddaySummary.isNotEmpty && _repeatDays == 1) ...[
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
                       color: const Color(0xFFE8F8F2),
                       borderRadius: BorderRadius.circular(8),
@@ -1173,7 +1187,7 @@ class _MealLogTabState extends State<MealLogTab> {
                   ),
                 ],
 
-                const Divider(height: 22, thickness: 0.5),
+                const Divider(height: 24, thickness: 0.5),
 
                 // 식사 시간
                 Row(
@@ -1201,9 +1215,9 @@ class _MealLogTabState extends State<MealLogTab> {
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 18),
 
-          // 2. 끼니 차수 선택: 글자 잘림 완벽 해결 (1끼, 2끼, 3끼, 간식)
+          // (2) 끼니 선택: 1끼, 2끼, 3끼, 간식 글자 잘림 완벽 해결 (커스텀 박스)
           const Text('끼니 선택', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF234E42))),
           const SizedBox(height: 8),
           Row(
@@ -1211,31 +1225,32 @@ class _MealLogTabState extends State<MealLogTab> {
               final isSelected = _selectedMealType == m;
               return Padding(
                 padding: const EdgeInsets.only(right: 8),
-                child: FilterChip(
-                  label: Text(m.label),
-                  labelStyle: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                    height: 1.1,
-                    color: isSelected ? Colors.white : m.primaryColor,
+                child: InkWell(
+                  onTap: () => setState(() => _selectedMealType = m),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isSelected ? m.primaryColor : m.bgColor,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: isSelected ? m.primaryColor : m.primaryColor.withOpacity(0.4),
+                      ),
+                    ),
+                    child: Text(
+                      m.label,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        color: isSelected ? Colors.white : m.primaryColor,
+                      ),
+                    ),
                   ),
-                  selected: isSelected,
-                  showCheckmark: false,
-                  backgroundColor: m.bgColor,
-                  selectedColor: m.primaryColor,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  side: BorderSide(
-                    color: isSelected ? m.primaryColor : m.primaryColor.withOpacity(0.3),
-                  ),
-                  onSelected: (val) {
-                    if (val) setState(() => _selectedMealType = m);
-                  },
                 ),
               );
             }).toList(),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 18),
 
           // 3. 토핑 큐브 선택 카드
           Container(
@@ -1462,24 +1477,25 @@ class _MealLogTabState extends State<MealLogTab> {
           runSpacing: 6,
           children: tags.map((tag) {
             final isSelected = _activeTags.contains(tag);
-            return FilterChip(
-              label: Text(tag),
-              labelStyle: TextStyle(
-                fontSize: 12,
-                height: 1.1,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: isSelected ? Colors.white : Colors.black87,
+            return InkWell(
+              onTap: () => _toggleTag(tag),
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: isSelected ? accentColor : const Color(0xFFF1F3F5),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: isSelected ? accentColor : Colors.grey.shade300),
+                ),
+                child: Text(
+                  tag,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    color: isSelected ? Colors.white : Colors.black87,
+                  ),
+                ),
               ),
-              selected: isSelected,
-              showCheckmark: false,
-              selectedColor: accentColor,
-              backgroundColor: const Color(0xFFF1F3F5),
-              side: BorderSide(
-                color: isSelected ? accentColor : Colors.grey.shade300,
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              onSelected: (_) => _toggleTag(tag),
             );
           }).toList(),
         ),
@@ -1489,7 +1505,7 @@ class _MealLogTabState extends State<MealLogTab> {
 }
 
 /// ==========================================
-/// (2) 캘린더 화면 (토글 중앙 정렬 및 '주간/월간' 간소화)
+/// (2) 캘린더 화면 (주간/월간 커스텀 토글 및 중앙 정렬)
 /// ==========================================
 enum CalendarViewMode { week, month }
 
@@ -1635,21 +1651,31 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(title, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   Wrap(
-                    spacing: 4,
-                    runSpacing: 4,
+                    spacing: 6,
+                    runSpacing: 6,
                     children: tags.map((t) {
                       final isSel = activeTags.contains(t) || reactionController.text.contains(t);
-                      return FilterChip(
-                        label: Text(t, style: TextStyle(fontSize: 11, color: isSel ? Colors.white : Colors.black87)),
-                        selected: isSel,
-                        showCheckmark: false,
-                        selectedColor: accentColor,
-                        backgroundColor: const Color(0xFFF1F3F5),
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        onSelected: (_) => toggleDialogTag(t),
+                      return InkWell(
+                        onTap: () => toggleDialogTag(t),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: isSel ? accentColor : const Color(0xFFF1F3F5),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: isSel ? accentColor : Colors.grey.shade300),
+                          ),
+                          child: Text(
+                            t,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                              color: isSel ? Colors.white : Colors.black87,
+                            ),
+                          ),
+                        ),
                       );
                     }).toList(),
                   ),
@@ -1736,29 +1762,36 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                     ),
                     const SizedBox(height: 14),
                     const Text('끼니 차수', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 8),
                     Row(
                       children: MealType.values.map((m) {
                         final isSel = currentType == m;
                         return Padding(
                           padding: const EdgeInsets.only(right: 6),
-                          child: ChoiceChip(
-                            label: Text(m.label),
-                            selected: isSel,
-                            selectedColor: m.primaryColor,
-                            labelStyle: TextStyle(
-                              color: isSel ? Colors.white : m.primaryColor,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 11,
+                          child: InkWell(
+                            onTap: () => setDialogState(() => currentType = m),
+                            borderRadius: BorderRadius.circular(6),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: isSel ? m.primaryColor : m.bgColor,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: isSel ? m.primaryColor : m.primaryColor.withOpacity(0.4)),
+                              ),
+                              child: Text(
+                                m.label,
+                                style: TextStyle(
+                                  color: isSel ? Colors.white : m.primaryColor,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
                             ),
-                            onSelected: (val) {
-                              if (val) setDialogState(() => currentType = m);
-                            },
                           ),
                         );
                       }).toList(),
                     ),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -1881,41 +1914,93 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
       backgroundColor: const Color(0xFFF4F9F6),
       body: Column(
         children: [
-          // (2) 캘린더 화면 보기 방식: 완벽한 중앙 정렬 및 '주간' / '월간' 간소화
+          // (2) 캘린더 화면 보기 방식: 중앙 정렬 & 커스텀 토글 버튼으로 글자 짤림 방지
           Container(
             color: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             alignment: Alignment.center,
-            child: SizedBox(
-              width: double.infinity,
-              height: 38,
-              child: Center(
-                child: SegmentedButton<CalendarViewMode>(
-                  segments: const [
-                    ButtonSegment<CalendarViewMode>(
-                      value: CalendarViewMode.week,
-                      label: Text('주간', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                      icon: Icon(Icons.view_week_outlined, size: 16),
+            child: Container(
+              width: 220,
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F3F5),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: () {
+                        setState(() {
+                          _viewMode = CalendarViewMode.week;
+                          _focusedDate = _selectedDate;
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        decoration: BoxDecoration(
+                          color: _viewMode == CalendarViewMode.week ? Colors.white : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: _viewMode == CalendarViewMode.week
+                              ? [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4, offset: const Offset(0, 1))]
+                              : null,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.view_week_outlined, size: 15, color: _viewMode == CalendarViewMode.week ? const Color(0xFF3EB489) : Colors.grey.shade600),
+                            const SizedBox(width: 4),
+                            Text(
+                              '주간',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: _viewMode == CalendarViewMode.week ? FontWeight.bold : FontWeight.w500,
+                                color: _viewMode == CalendarViewMode.week ? const Color(0xFF234E42) : Colors.grey.shade700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                    ButtonSegment<CalendarViewMode>(
-                      value: CalendarViewMode.month,
-                      label: Text('월간', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                      icon: Icon(Icons.calendar_view_month, size: 16),
-                    ),
-                  ],
-                  selected: {_viewMode},
-                  onSelectionChanged: (newSelection) {
-                    setState(() {
-                      _viewMode = newSelection.first;
-                      _focusedDate = _selectedDate;
-                    });
-                  },
-                  style: SegmentedButton.styleFrom(
-                    selectedBackgroundColor: const Color(0xFFE8F8F2),
-                    selectedForegroundColor: const Color(0xFF3EB489),
-                    visualDensity: VisualDensity.compact,
                   ),
-                ),
+                  Expanded(
+                    child: InkWell(
+                      onTap: () {
+                        setState(() {
+                          _viewMode = CalendarViewMode.month;
+                          _focusedDate = _selectedDate;
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        decoration: BoxDecoration(
+                          color: _viewMode == CalendarViewMode.month ? Colors.white : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: _viewMode == CalendarViewMode.month
+                              ? [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4, offset: const Offset(0, 1))]
+                              : null,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.calendar_view_month, size: 15, color: _viewMode == CalendarViewMode.month ? const Color(0xFF3EB489) : Colors.grey.shade600),
+                            const SizedBox(width: 4),
+                            Text(
+                              '월간',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: _viewMode == CalendarViewMode.month ? FontWeight.bold : FontWeight.w500,
+                                color: _viewMode == CalendarViewMode.month ? const Color(0xFF234E42) : Colors.grey.shade700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -2732,61 +2817,73 @@ class _CubeStockTabState extends State<CubeStockTab> {
       backgroundColor: const Color(0xFFF4F9F6),
       body: Column(
         children: [
-          // (3) 보관함 탭 카테고리 칩: 글자 잘림 완벽 해결 (전체, 곡류, 단백질, 채소, 과일, 기타)
-          SizedBox(
-            height: 52,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              children: [
-                FilterChip(
-                  label: const Text('전체'),
-                  labelStyle: TextStyle(
-                    fontSize: 13,
-                    height: 1.1,
-                    fontWeight: _selectedCategory == null ? FontWeight.bold : FontWeight.normal,
-                    color: _selectedCategory == null ? const Color(0xFF234E42) : Colors.black87,
-                  ),
-                  selected: _selectedCategory == null,
-                  showCheckmark: false,
-                  selectedColor: const Color(0xFFE8F8F2),
-                  backgroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  side: BorderSide(
-                    color: _selectedCategory == null ? const Color(0xFF3EB489) : Colors.grey.shade300,
-                  ),
-                  onSelected: (_) => setState(() => _selectedCategory = null),
-                ),
-                const SizedBox(width: 8),
-                ...FoodCategory.values.map(
-                  (cat) => Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: FilterChip(
-                      label: Text(cat.label),
-                      labelStyle: TextStyle(
-                        fontSize: 13,
-                        height: 1.1,
-                        fontWeight: _selectedCategory == cat ? FontWeight.bold : FontWeight.normal,
-                        color: _selectedCategory == cat ? const Color(0xFF234E42) : Colors.black87,
+          // (3) 보관함 카테고리: Chip 제거 및 커스텀 컨테이너로 글자 짤림 방지
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: SizedBox(
+              height: 40,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                children: [
+                  // '전체' 버튼
+                  InkWell(
+                    onTap: () => setState(() => _selectedCategory = null),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _selectedCategory == null ? const Color(0xFFE8F8F2) : Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: _selectedCategory == null ? const Color(0xFF3EB489) : Colors.grey.shade300,
+                        ),
                       ),
-                      selected: _selectedCategory == cat,
-                      showCheckmark: false,
-                      selectedColor: const Color(0xFFE8F8F2),
-                      backgroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      side: BorderSide(
-                        color: _selectedCategory == cat ? const Color(0xFF3EB489) : Colors.grey.shade300,
+                      child: Text(
+                        '전체',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: _selectedCategory == null ? FontWeight.bold : FontWeight.normal,
+                          color: _selectedCategory == null ? const Color(0xFF234E42) : Colors.black87,
+                        ),
                       ),
-                      onSelected: (val) => setState(() => _selectedCategory = val ? cat : null),
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  // 각 카테고리별 버튼
+                  ...FoodCategory.values.map(
+                    (cat) => Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: InkWell(
+                        onTap: () => setState(() => _selectedCategory = (_selectedCategory == cat ? null : cat)),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: _selectedCategory == cat ? const Color(0xFFE8F8F2) : Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: _selectedCategory == cat ? const Color(0xFF3EB489) : Colors.grey.shade300,
+                            ),
+                          ),
+                          child: Text(
+                            cat.label,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: _selectedCategory == cat ? FontWeight.bold : FontWeight.normal,
+                              color: _selectedCategory == cat ? const Color(0xFF234E42) : Colors.black87,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Expanded(
             child: filtered.isEmpty
                 ? const Center(
