@@ -113,19 +113,28 @@ class CubeItem {
   }
 
   String get dDayText {
-    if (isPlannedOnly) return '미보유';
+    if (isPlannedOnly) return '미보유(제작필요)';
     final d = daysRemaining;
     if (d < 0) return '만료(D+${-d})';
     if (d == 0) return 'D-Day';
     return 'D-$d';
   }
 
+  // 미보유는 보라색, 보유 중인 정상 큐브는 초록색으로 구분
   Color get statusColor {
-    if (isPlannedOnly) return const Color(0xFF9C27B0);
+    if (isPlannedOnly) return const Color(0xFF9C27B0); // 보라색
     final d = daysRemaining;
-    if (d < 0) return const Color(0xFFE53935);
-    if (d <= 2) return const Color(0xFFFB8C00);
-    return const Color(0xFF3EB489);
+    if (d < 0) return const Color(0xFFE53935); // 만료 빨간색
+    if (d <= 2) return const Color(0xFFFB8C00); // 임박 주황색
+    return const Color(0xFF3EB489); // 보유 정상 초록색
+  }
+
+  Color get statusBgColor {
+    if (isPlannedOnly) return const Color(0xFFF3E5F5);
+    final d = daysRemaining;
+    if (d < 0) return const Color(0xFFFFEBEE);
+    if (d <= 2) return const Color(0xFFFFF3E0);
+    return const Color(0xFFE8F8F2);
   }
 
   Map<String, dynamic> toJson() => {
@@ -205,7 +214,7 @@ class MainNavigationScreen extends StatefulWidget {
 }
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
-  int _currentTabIndex = 0; // 0번 캘린더 기본
+  int _currentTabIndex = 0; // 캘린더가 1번
   bool _isLoading = true;
 
   List<CubeItem> _cubes = [];
@@ -864,8 +873,8 @@ class _MealLogTabState extends State<MealLogTab> {
                                             const SizedBox(width: 6),
                                             Container(
                                               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                                              decoration: BoxDecoration(color: Colors.purple.shade50, borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.purple.shade200)),
-                                              child: Text('신규 제작필요', style: TextStyle(fontSize: 10, color: Colors.purple.shade700, fontWeight: FontWeight.bold)),
+                                              decoration: BoxDecoration(color: const Color(0xFFF3E5F5), borderRadius: BorderRadius.circular(4), border: Border.all(color: const Color(0xFFCE93D8))),
+                                              child: const Text('신규 제작필요', style: TextStyle(fontSize: 10, color: Color(0xFF9C27B0), fontWeight: FontWeight.bold)),
                                             ),
                                           ],
                                         ],
@@ -1323,7 +1332,7 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
 }
 
 // ==========================================
-// 3. 큐브 보관함 화면 (미보유 시 부연설명 삭제)
+// 3. 큐브 보관함 화면 (미보유: 보라색 / 보유: 초록색 뱃지)
 // ==========================================
 class CubeStockTab extends StatefulWidget {
   final List<CubeItem> cubes;
@@ -1392,27 +1401,54 @@ class _CubeStockTabState extends State<CubeStockTab> {
                   margin: const EdgeInsets.only(bottom: 10),
                   color: Colors.white,
                   elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.grey.shade200)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: c.isPlannedOnly ? const Color(0xFFCE93D8) : Colors.grey.shade200),
+                  ),
                   child: Padding(
                     padding: const EdgeInsets.all(12),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(getFoodEmoji(c.name), style: const TextStyle(fontSize: 22)),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(c.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                              // 미보유 시 부연설명 제외, 보유 시 제조일자만 표시
-                              if (!c.isPlannedOnly)
-                                Text('개당 ${c.unitWeight}g · ${c.quantity}개 남음 (${c.dDayText})', style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                            ],
-                          ),
+                        // 상태 뱃지 영역: 미보유(보라색) vs 보유(초록색)
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(color: c.category.bgColor, borderRadius: BorderRadius.circular(4)),
+                              child: Text(c.category.label, style: TextStyle(color: c.category.textColor, fontSize: 10, fontWeight: FontWeight.bold)),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(color: c.statusBgColor, borderRadius: BorderRadius.circular(4)),
+                              child: Text(
+                                c.dDayText,
+                                style: TextStyle(color: c.statusColor, fontSize: 10, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
                         ),
-                        IconButton(icon: const Icon(Icons.remove, size: 18), onPressed: c.quantity > 0 ? () => widget.onUpdateQty(c, -1) : null),
-                        Text('${c.quantity}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                        IconButton(icon: const Icon(Icons.add, size: 18), onPressed: () => widget.onUpdateQty(c, 1)),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Text(getFoodEmoji(c.name), style: const TextStyle(fontSize: 22)),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(c.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                                  if (!c.isPlannedOnly)
+                                    Text('개당 ${c.unitWeight}g · ${c.quantity}개 남음', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                                ],
+                              ),
+                            ),
+                            IconButton(icon: const Icon(Icons.remove, size: 18), onPressed: c.quantity > 0 ? () => widget.onUpdateQty(c, -1) : null),
+                            Text('${c.quantity}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                            IconButton(icon: const Icon(Icons.add, size: 18), onPressed: () => widget.onUpdateQty(c, 1)),
+                          ],
+                        ),
                       ],
                     ),
                   ),
@@ -1472,7 +1508,7 @@ class _CubeStockTabState extends State<CubeStockTab> {
 }
 
 // ==========================================
-// 4. 제작 필요 화면 (초록 박스 삭제, 문구 간결화, 소진 임박 표시)
+// 4. 제작 필요 화면 (소진 임박: 빨간색 / 미보유: 보라색)
 // ==========================================
 class RestockPlanTab extends StatelessWidget {
   final List<CubeItem> cubes;
@@ -1486,7 +1522,6 @@ class RestockPlanTab extends StatelessWidget {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    // 미래/당일 식단 기준
     final futureLogs = mealLogs.where((l) {
       final logDay = DateTime(l.time.year, l.time.month, l.time.day);
       return logDay.isAfter(today) || logDay.isAtSameMomentAs(today);
@@ -1495,7 +1530,7 @@ class RestockPlanTab extends StatelessWidget {
     List<_PlanDisplayItem> items = [];
 
     for (var cube in cubes) {
-      // 1. 신규 미보유 식재료
+      // 1. 미보유 신규 재료 (보라색 테마)
       if (cube.isPlannedOnly) {
         DateTime? targetDate;
         for (var l in futureLogs) {
@@ -1504,9 +1539,9 @@ class RestockPlanTab extends StatelessWidget {
         final dl = targetDate != null ? '${targetDate.month}월 ${targetDate.day}일' : '식단 전';
         items.add(_PlanDisplayItem(
           cube: cube,
-          urgency: null, // 중복 표현 삭제
+          urgency: null,
           deadline: dl,
-          color: const Color(0xFF6A1B9A),
+          color: const Color(0xFF8E24AA), // 보라색
           score: targetDate != null ? targetDate.difference(today).inDays : 99,
         ));
         continue;
@@ -1515,7 +1550,7 @@ class RestockPlanTab extends StatelessWidget {
       int curQty = cube.quantity;
       DateTime? runOutDate;
 
-      // 2. 현재 재고 0개
+      // 2. 현재 재고 0개 (빨간색)
       if (curQty == 0) {
         DateTime? nextDate;
         for (var l in futureLogs) {
@@ -1526,13 +1561,13 @@ class RestockPlanTab extends StatelessWidget {
           cube: cube,
           urgency: '현재 재고 0개',
           deadline: dl,
-          color: const Color(0xFFD32F2F),
+          color: const Color(0xFFE53935), // 빨간색
           score: -50,
         ));
         continue;
       }
 
-      // 3. 소비기한 만료
+      // 3. 소비기한 만료 (주황/빨강)
       if (cube.daysRemaining < 0) {
         items.add(_PlanDisplayItem(
           cube: cube,
@@ -1544,7 +1579,7 @@ class RestockPlanTab extends StatelessWidget {
         continue;
       }
 
-      // 4. 소진 임박
+      // 4. 식단 계획으로 인한 소진 임박 (선명한 빨간색)
       for (var l in futureLogs) {
         if (l.cubeUsage.containsKey(cube.id)) {
           final use = l.cubeUsage[cube.id]!;
@@ -1556,9 +1591,9 @@ class RestockPlanTab extends StatelessWidget {
       if (runOutDate != null) {
         items.add(_PlanDisplayItem(
           cube: cube,
-          urgency: '소진 임박', // '소진 임박'으로 변경
+          urgency: '소진 임박', // 요청하신 '소진 임박'
           deadline: '${runOutDate.month}월 ${runOutDate.day}일',
-          color: const Color(0xFFC2185B),
+          color: const Color(0xFFE53935), // 선명한 빨간색 복원
           score: -100 + runOutDate.difference(today).inDays,
         ));
       } else if (cube.quantity <= 2) {
@@ -1566,7 +1601,7 @@ class RestockPlanTab extends StatelessWidget {
           cube: cube,
           urgency: '안전 재고 부족 (${cube.quantity}개)',
           deadline: '${cube.expireDate.month}월 ${cube.expireDate.day}일',
-          color: const Color(0xFFFB8C00),
+          color: const Color(0xFFFB8C00), // 안전재고 주황색
           score: 10 + cube.daysRemaining,
         ));
       }
@@ -1581,7 +1616,6 @@ class RestockPlanTab extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 상단 초록색 박스 전체 삭제 완료
             Text('제작 필요 토핑 (${items.length}개)', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF234E42))),
             const SizedBox(height: 10),
             Expanded(
@@ -1597,39 +1631,41 @@ class RestockPlanTab extends StatelessWidget {
                           margin: const EdgeInsets.only(bottom: 8),
                           color: Colors.white,
                           elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: Colors.grey.shade200)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            side: BorderSide(color: item.color.withOpacity(0.3)),
+                          ),
                           child: Padding(
                             padding: const EdgeInsets.all(12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                            child: Row(
                               children: [
-                                Row(
-                                  children: [
-                                    Text(getFoodEmoji(c.name), style: const TextStyle(fontSize: 22)),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                Text(getFoodEmoji(c.name), style: const TextStyle(fontSize: 22)),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
                                         children: [
-                                          Row(
-                                            children: [
-                                              Text(c.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                                              if (item.urgency != null) ...[
-                                                const SizedBox(width: 6),
-                                                Text(item.urgency!, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: item.color)),
-                                              ],
-                                            ],
-                                          ),
-                                          Text('제작 마감일: ${item.deadline}', style: TextStyle(fontSize: 11, color: item.color, fontWeight: FontWeight.w600)),
+                                          Text(c.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                          if (item.urgency != null) ...[
+                                            const SizedBox(width: 6),
+                                            Text(item.urgency!, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: item.color)),
+                                          ],
                                         ],
                                       ),
-                                    ),
-                                    ElevatedButton(
-                                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF3EB489), foregroundColor: Colors.white, visualDensity: VisualDensity.compact),
-                                      onPressed: () => onRestock(c, 6, DateTime.now(), 7),
-                                      child: const Text('제작 완료', style: TextStyle(fontSize: 11)),
-                                    ),
-                                  ],
+                                      Text('제작 마감일: ${item.deadline}', style: TextStyle(fontSize: 11, color: item.color, fontWeight: FontWeight.w600)),
+                                    ],
+                                  ),
+                                ),
+                                ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: c.isPlannedOnly ? const Color(0xFF8E24AA) : const Color(0xFF3EB489),
+                                    foregroundColor: Colors.white,
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  onPressed: () => onRestock(c, 6, DateTime.now(), 7),
+                                  child: const Text('제작 완료', style: TextStyle(fontSize: 11)),
                                 ),
                               ],
                             ),
