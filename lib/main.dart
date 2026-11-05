@@ -120,13 +120,12 @@ class CubeItem {
     return 'D-$d';
   }
 
-  // 미보유는 보라색, 보유 중인 정상 큐브는 초록색으로 구분
   Color get statusColor {
-    if (isPlannedOnly) return const Color(0xFF9C27B0); // 보라색
+    if (isPlannedOnly) return const Color(0xFF9C27B0);
     final d = daysRemaining;
-    if (d < 0) return const Color(0xFFE53935); // 만료 빨간색
-    if (d <= 2) return const Color(0xFFFB8C00); // 임박 주황색
-    return const Color(0xFF3EB489); // 보유 정상 초록색
+    if (d < 0) return const Color(0xFFE53935);
+    if (d <= 2) return const Color(0xFFFB8C00);
+    return const Color(0xFF3EB489);
   }
 
   Color get statusBgColor {
@@ -214,7 +213,7 @@ class MainNavigationScreen extends StatefulWidget {
 }
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
-  int _currentTabIndex = 0; // 캘린더가 1번
+  int _currentTabIndex = 0;
   bool _isLoading = true;
 
   List<CubeItem> _cubes = [];
@@ -1332,7 +1331,7 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
 }
 
 // ==========================================
-// 3. 큐브 보관함 화면 (미보유: 보라색 / 보유: 초록색 뱃지)
+// 3. 큐브 보관함 화면
 // ==========================================
 class CubeStockTab extends StatefulWidget {
   final List<CubeItem> cubes;
@@ -1410,7 +1409,6 @@ class _CubeStockTabState extends State<CubeStockTab> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // 상태 뱃지 영역: 미보유(보라색) vs 보유(초록색)
                         Row(
                           children: [
                             Container(
@@ -1508,9 +1506,11 @@ class _CubeStockTabState extends State<CubeStockTab> {
 }
 
 // ==========================================
-// 4. 제작 필요 화면 (소진 임박: 빨간색 / 미보유: 보라색)
+// 4. 제작 필요 화면 (전체/보유/미보유 칩, 소진 임박 잔여량 표기, 미보유 중량 표기)
 // ==========================================
-class RestockPlanTab extends StatelessWidget {
+enum RestockFilter { all, owned, unowned }
+
+class RestockPlanTab extends StatefulWidget {
   final List<CubeItem> cubes;
   final List<MealLog> mealLogs;
   final Function(CubeItem, int, DateTime, int) onRestock;
@@ -1518,19 +1518,26 @@ class RestockPlanTab extends StatelessWidget {
   const RestockPlanTab({super.key, required this.cubes, required this.mealLogs, required this.onRestock});
 
   @override
+  State<RestockPlanTab> createState() => _RestockPlanTabState();
+}
+
+class _RestockPlanTabState extends State<RestockPlanTab> {
+  RestockFilter _filter = RestockFilter.all;
+
+  @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    final futureLogs = mealLogs.where((l) {
+    final futureLogs = widget.mealLogs.where((l) {
       final logDay = DateTime(l.time.year, l.time.month, l.time.day);
       return logDay.isAfter(today) || logDay.isAtSameMomentAs(today);
     }).toList()..sort((a, b) => a.time.compareTo(b.time));
 
     List<_PlanDisplayItem> items = [];
 
-    for (var cube in cubes) {
-      // 1. 미보유 신규 재료 (보라색 테마)
+    for (var cube in widget.cubes) {
+      // 1. 미보유 신규 큐브
       if (cube.isPlannedOnly) {
         DateTime? targetDate;
         for (var l in futureLogs) {
@@ -1541,16 +1548,18 @@ class RestockPlanTab extends StatelessWidget {
           cube: cube,
           urgency: null,
           deadline: dl,
-          color: const Color(0xFF8E24AA), // 보라색
+          color: const Color(0xFF8E24AA),
           score: targetDate != null ? targetDate.difference(today).inDays : 99,
+          isUnowned: true,
         ));
         continue;
       }
 
       int curQty = cube.quantity;
+      int plannedDeduction = 0;
       DateTime? runOutDate;
 
-      // 2. 현재 재고 0개 (빨간색)
+      // 2. 현재 재고 0개
       if (curQty == 0) {
         DateTime? nextDate;
         for (var l in futureLogs) {
@@ -1561,13 +1570,14 @@ class RestockPlanTab extends StatelessWidget {
           cube: cube,
           urgency: '현재 재고 0개',
           deadline: dl,
-          color: const Color(0xFFE53935), // 빨간색
+          color: const Color(0xFFE53935),
           score: -50,
+          isUnowned: false,
         ));
         continue;
       }
 
-      // 3. 소비기한 만료 (주황/빨강)
+      // 3. 소비기한 만료
       if (cube.daysRemaining < 0) {
         items.add(_PlanDisplayItem(
           cube: cube,
@@ -1575,39 +1585,54 @@ class RestockPlanTab extends StatelessWidget {
           deadline: '폐기 후 신규 제작',
           color: const Color(0xFFE65100),
           score: -30,
+          isUnowned: false,
         ));
         continue;
       }
 
-      // 4. 식단 계획으로 인한 소진 임박 (선명한 빨간색)
+      // 4. 식단 계획에 따른 차감 시뮬레이션
       for (var l in futureLogs) {
         if (l.cubeUsage.containsKey(cube.id)) {
           final use = l.cubeUsage[cube.id]!;
-          if (curQty < use) { runOutDate = l.time; break; }
-          curQty -= use;
+          plannedDeduction += use;
+          if (curQty - plannedDeduction <= 3 && runOutDate == null) {
+            runOutDate = l.time;
+          }
         }
       }
 
-      if (runOutDate != null) {
+      final expectedRemaining = curQty - plannedDeduction;
+
+      // 차감 후 남은 개수가 3개 이하일 때만 '소진 임박' 딱지 부여
+      if (runOutDate != null && expectedRemaining <= 3) {
         items.add(_PlanDisplayItem(
           cube: cube,
-          urgency: '소진 임박', // 요청하신 '소진 임박'
+          urgency: '소진 임박 (잔여 ${expectedRemaining.clamp(0, 999)}개)',
           deadline: '${runOutDate.month}월 ${runOutDate.day}일',
-          color: const Color(0xFFE53935), // 선명한 빨간색 복원
+          color: const Color(0xFFE53935),
           score: -100 + runOutDate.difference(today).inDays,
+          isUnowned: false,
         ));
       } else if (cube.quantity <= 2) {
         items.add(_PlanDisplayItem(
           cube: cube,
           urgency: '안전 재고 부족 (${cube.quantity}개)',
           deadline: '${cube.expireDate.month}월 ${cube.expireDate.day}일',
-          color: const Color(0xFFFB8C00), // 안전재고 주황색
+          color: const Color(0xFFFB8C00),
           score: 10 + cube.daysRemaining,
+          isUnowned: false,
         ));
       }
     }
 
     items.sort((a, b) => a.score.compareTo(b.score));
+
+    // 전체 / 보유 / 미보유 필터링
+    final filteredItems = items.where((i) {
+      if (_filter == RestockFilter.owned) return !i.isUnowned;
+      if (_filter == RestockFilter.unowned) return i.isUnowned;
+      return true;
+    }).toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F9F6),
@@ -1616,15 +1641,26 @@ class RestockPlanTab extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('제작 필요 토핑 (${items.length}개)', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF234E42))),
+            // 전체 / 보유 / 미보유 칩 필터
+            Row(
+              children: [
+                _buildFilterButton('전체', RestockFilter.all),
+                const SizedBox(width: 8),
+                _buildFilterButton('보유 큐브', RestockFilter.owned),
+                const SizedBox(width: 8),
+                _buildFilterButton('미보유(신규)', RestockFilter.unowned),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text('제작 필요 토핑 (${filteredItems.length}개)', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF234E42))),
             const SizedBox(height: 10),
             Expanded(
-              child: items.isEmpty
-                  ? const Center(child: Text('모든 큐브가 넉넉합니다! 🎉'))
+              child: filteredItems.isEmpty
+                  ? const Center(child: Text('해당하는 큐브가 없습니다! 🎉', style: TextStyle(color: Colors.grey)))
                   : ListView.builder(
-                      itemCount: items.length,
+                      itemCount: filteredItems.length,
                       itemBuilder: (ctx, i) {
-                        final item = items[i];
+                        final item = filteredItems[i];
                         final c = item.cube;
 
                         return Card(
@@ -1654,6 +1690,13 @@ class RestockPlanTab extends StatelessWidget {
                                           ],
                                         ],
                                       ),
+                                      const SizedBox(height: 2),
+                                      // 미보유 큐브의 1회 권장 중량(g) 회색 표기 복원
+                                      if (c.isPlannedOnly)
+                                        Text('1회 권장량 ${c.unitWeight}g', style: TextStyle(fontSize: 11, color: Colors.grey.shade600))
+                                      else
+                                        Text('현재 재고 ${c.quantity}개 (개당 ${c.unitWeight}g)', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                                      const SizedBox(height: 2),
                                       Text('제작 마감일: ${item.deadline}', style: TextStyle(fontSize: 11, color: item.color, fontWeight: FontWeight.w600)),
                                     ],
                                   ),
@@ -1664,7 +1707,7 @@ class RestockPlanTab extends StatelessWidget {
                                     foregroundColor: Colors.white,
                                     visualDensity: VisualDensity.compact,
                                   ),
-                                  onPressed: () => onRestock(c, 6, DateTime.now(), 7),
+                                  onPressed: () => widget.onRestock(c, 6, DateTime.now(), 7),
                                   child: const Text('제작 완료', style: TextStyle(fontSize: 11)),
                                 ),
                               ],
@@ -1679,6 +1722,30 @@ class RestockPlanTab extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildFilterButton(String label, RestockFilter filter) {
+    final isSel = _filter == filter;
+    return InkWell(
+      onTap: () => setState(() => _filter = filter),
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSel ? const Color(0xFF3EB489) : Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: isSel ? const Color(0xFF3EB489) : Colors.grey.shade300),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+            color: isSel ? Colors.white : const Color(0xFF234E42),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _PlanDisplayItem {
@@ -1687,6 +1754,14 @@ class _PlanDisplayItem {
   final String deadline;
   final Color color;
   final int score;
+  final bool isUnowned;
 
-  _PlanDisplayItem({required this.cube, this.urgency, required this.deadline, required this.color, required this.score});
+  _PlanDisplayItem({
+    required this.cube,
+    this.urgency,
+    required this.deadline,
+    required this.color,
+    required this.score,
+    required this.isUnowned,
+  });
 }
