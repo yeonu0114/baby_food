@@ -213,7 +213,7 @@ class MainNavigationScreen extends StatefulWidget {
 }
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
-  int _currentTabIndex = 0;
+  int _currentTabIndex = 0; // 0번: 캘린더 기본
   bool _isLoading = true;
 
   List<CubeItem> _cubes = [];
@@ -678,7 +678,6 @@ class _MealLogTabState extends State<MealLogTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. 날짜 범위 카드
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -1005,7 +1004,7 @@ class _MealLogTabState extends State<MealLogTab> {
 }
 
 // ==========================================
-// 2. 캘린더 화면
+// 2. 캘린더 화면 (식단계획 민트 구분 & 수정 팝업 복구)
 // ==========================================
 class MealCalendarTab extends StatefulWidget {
   final List<MealLog> mealLogs;
@@ -1065,6 +1064,87 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
       }
     });
     return news;
+  }
+
+  // 식단 수정 다이얼로그 복구
+  void _showEditMealDialog(MealLog log) {
+    MealType currentType = log.mealType;
+    TimeOfDay currentTime = TimeOfDay(hour: log.time.hour, minute: log.time.minute);
+    final reactionController = TextEditingController(text: log.reaction);
+    final gramsController = TextEditingController(text: '${log.totalGrams}');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDState) => AlertDialog(
+          title: const Text('식단 기록 수정', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('식재료: ${log.ingredients.join(" + ")}', style: TextStyle(fontSize: 12, color: Colors.grey.shade700, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 12),
+                const Text('끼니 차수', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                Row(
+                  children: MealType.values.map((m) {
+                    final isSel = currentType == m;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: InkWell(
+                        onTap: () => setDState(() => currentType = m),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: isSel ? m.primaryColor : m.bgColor,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: isSel ? m.primaryColor : m.primaryColor.withOpacity(0.4)),
+                          ),
+                          child: Text(m.label, style: TextStyle(color: isSel ? Colors.white : m.primaryColor, fontWeight: FontWeight.bold, fontSize: 12)),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('시간: ${currentTime.hour.toString().padLeft(2, '0')}:${currentTime.minute.toString().padLeft(2, '0')}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    TextButton.icon(
+                      icon: const Icon(Icons.schedule, size: 14),
+                      label: const Text('시간 변경', style: TextStyle(fontSize: 12)),
+                      onPressed: () async {
+                        final picked = await showTimePicker(context: context, initialTime: currentTime);
+                        if (picked != null) setDState(() => currentTime = picked);
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                TextField(controller: gramsController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '총 섭취량 (g)')),
+                const SizedBox(height: 8),
+                TextField(controller: reactionController, decoration: const InputDecoration(labelText: '메모 / 아기 반응')),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF3EB489), foregroundColor: Colors.white),
+              onPressed: () {
+                final newDt = DateTime(log.time.year, log.time.month, log.time.day, currentTime.hour, currentTime.minute);
+                final g = int.tryParse(gramsController.text) ?? log.totalGrams;
+                widget.onEditMeal(log, currentType, newDt, reactionController.text.trim(), g);
+                Navigator.pop(ctx);
+              },
+              child: const Text('수정 완료'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -1156,7 +1236,13 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
-                          side: BorderSide(color: news.isNotEmpty ? const Color(0xFFFFB74D) : Colors.grey.shade200),
+                          // 식단계획(isPlanned)은 민트색 테두리로 시각 구분
+                          side: BorderSide(
+                            color: l.isPlanned
+                                ? const Color(0xFF3EB489)
+                                : (news.isNotEmpty ? const Color(0xFFFFB74D) : Colors.grey.shade200),
+                            width: l.isPlanned ? 1.5 : 1.0,
+                          ),
                         ),
                         child: Padding(
                           padding: const EdgeInsets.all(10),
@@ -1175,13 +1261,40 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                                       ),
                                       const SizedBox(width: 6),
                                       Text('${l.time.hour.toString().padLeft(2, '0')}:${l.time.minute.toString().padLeft(2, '0')}', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                                      // 식단계획 민트색 뱃지
                                       if (l.isPlanned) ...[
                                         const SizedBox(width: 6),
-                                        const Text('식단 계획', style: TextStyle(fontSize: 10, color: Color(0xFF3EB489), fontWeight: FontWeight.bold)),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                          decoration: BoxDecoration(color: const Color(0xFFE8F8F2), borderRadius: BorderRadius.circular(4)),
+                                          child: const Text('식단 계획', style: TextStyle(fontSize: 10, color: Color(0xFF3EB489), fontWeight: FontWeight.bold)),
+                                        ),
                                       ],
                                     ],
                                   ),
-                                  Text('${l.totalGrams}g', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                  Row(
+                                    children: [
+                                      Text('${l.totalGrams}g', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                      const SizedBox(width: 4),
+                                      // 수정/삭제 팝업 메뉴 복구
+                                      PopupMenuButton<String>(
+                                        icon: const Icon(Icons.more_vert, size: 18, color: Colors.grey),
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(),
+                                        onSelected: (val) {
+                                          if (val == 'edit') {
+                                            _showEditMealDialog(l);
+                                          } else if (val == 'delete') {
+                                            widget.onDeleteMeal(l);
+                                          }
+                                        },
+                                        itemBuilder: (context) => [
+                                          const PopupMenuItem(value: 'edit', child: Text('수정', style: TextStyle(fontSize: 13))),
+                                          const PopupMenuItem(value: 'delete', child: Text('삭제', style: TextStyle(fontSize: 13, color: Colors.red))),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
                                 ],
                               ),
                               if (news.isNotEmpty) ...[
@@ -1506,7 +1619,7 @@ class _CubeStockTabState extends State<CubeStockTab> {
 }
 
 // ==========================================
-// 4. 제작 필요 화면 (전체/보유/미보유 칩, 소진 임박 잔여량 표기, 미보유 중량 표기)
+// 4. 제작 필요 화면 (현재 재고 3개 이하 소진 임박 / 상단 칩 전체, 보유, 미보유)
 // ==========================================
 enum RestockFilter { all, owned, unowned }
 
@@ -1556,16 +1669,14 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
       }
 
       int curQty = cube.quantity;
-      int plannedDeduction = 0;
-      DateTime? runOutDate;
+      DateTime? nextUseDate;
+      for (var l in futureLogs) {
+        if (l.cubeUsage.containsKey(cube.id)) { nextUseDate = l.time; break; }
+      }
 
       // 2. 현재 재고 0개
       if (curQty == 0) {
-        DateTime? nextDate;
-        for (var l in futureLogs) {
-          if (l.cubeUsage.containsKey(cube.id)) { nextDate = l.time; break; }
-        }
-        final dl = nextDate != null ? '${nextDate.month}월 ${nextDate.day}일' : '즉시 제작';
+        final dl = nextUseDate != null ? '${nextUseDate.month}월 ${nextUseDate.day}일' : '즉시 제작';
         items.add(_PlanDisplayItem(
           cube: cube,
           urgency: '현재 재고 0개',
@@ -1590,36 +1701,15 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
         continue;
       }
 
-      // 4. 식단 계획에 따른 차감 시뮬레이션
-      for (var l in futureLogs) {
-        if (l.cubeUsage.containsKey(cube.id)) {
-          final use = l.cubeUsage[cube.id]!;
-          plannedDeduction += use;
-          if (curQty - plannedDeduction <= 3 && runOutDate == null) {
-            runOutDate = l.time;
-          }
-        }
-      }
-
-      final expectedRemaining = curQty - plannedDeduction;
-
-      // 차감 후 남은 개수가 3개 이하일 때만 '소진 임박' 딱지 부여
-      if (runOutDate != null && expectedRemaining <= 3) {
+      // 4. '현재 재고' 기준 3개 이하일 때만 '소진 임박'
+      if (curQty <= 3) {
+        final dl = nextUseDate != null ? '${nextUseDate.month}월 ${nextUseDate.day}일' : '${cube.expireDate.month}월 ${cube.expireDate.day}일';
         items.add(_PlanDisplayItem(
           cube: cube,
-          urgency: '소진 임박 (잔여 ${expectedRemaining.clamp(0, 999)}개)',
-          deadline: '${runOutDate.month}월 ${runOutDate.day}일',
-          color: const Color(0xFFE53935),
-          score: -100 + runOutDate.difference(today).inDays,
-          isUnowned: false,
-        ));
-      } else if (cube.quantity <= 2) {
-        items.add(_PlanDisplayItem(
-          cube: cube,
-          urgency: '안전 재고 부족 (${cube.quantity}개)',
-          deadline: '${cube.expireDate.month}월 ${cube.expireDate.day}일',
-          color: const Color(0xFFFB8C00),
-          score: 10 + cube.daysRemaining,
+          urgency: '소진 임박', // '(잔여 #개)' 제거 및 현재 재고 3개 이하 적용
+          deadline: dl,
+          color: const Color(0xFFE53935), // 빨간색
+          score: -80 + (nextUseDate != null ? nextUseDate.difference(today).inDays : 10),
           isUnowned: false,
         ));
       }
@@ -1641,14 +1731,14 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 전체 / 보유 / 미보유 칩 필터
+            // 상단 필터 칩: 전체 / 보유 / 미보유
             Row(
               children: [
                 _buildFilterButton('전체', RestockFilter.all),
                 const SizedBox(width: 8),
-                _buildFilterButton('보유 큐브', RestockFilter.owned),
+                _buildFilterButton('보유', RestockFilter.owned),
                 const SizedBox(width: 8),
-                _buildFilterButton('미보유(신규)', RestockFilter.unowned),
+                _buildFilterButton('미보유', RestockFilter.unowned),
               ],
             ),
             const SizedBox(height: 14),
@@ -1691,7 +1781,6 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
                                         ],
                                       ),
                                       const SizedBox(height: 2),
-                                      // 미보유 큐브의 1회 권장 중량(g) 회색 표기 복원
                                       if (c.isPlannedOnly)
                                         Text('1회 권장량 ${c.unitWeight}g', style: TextStyle(fontSize: 11, color: Colors.grey.shade600))
                                       else
