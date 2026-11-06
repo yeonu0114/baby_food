@@ -213,7 +213,7 @@ class MainNavigationScreen extends StatefulWidget {
 }
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
-  int _currentTabIndex = 0; // 0번: 캘린더 기본
+  int _currentTabIndex = 0;
   bool _isLoading = true;
 
   List<CubeItem> _cubes = [];
@@ -421,7 +421,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       return const Scaffold(body: Center(child: CircularProgressIndicator(color: Color(0xFF3EB489))));
     }
 
-    final restockCount = _cubes.where((c) => c.isPlannedOnly || c.quantity <= 2 || c.daysRemaining < 0).length;
+    final restockCount = _cubes.where((c) => c.isPlannedOnly || c.quantity <= 3 || c.daysRemaining < 0).length;
 
     return Scaffold(
       appBar: AppBar(
@@ -515,8 +515,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           RestockPlanTab(
             cubes: _cubes,
             mealLogs: _mealLogs,
-            onRestock: (c, q, md, sl) {
+            onRestock: (c, w, q, md, sl) {
               setState(() {
+                c.unitWeight = w;
                 c.quantity += q;
                 c.madeDate = md;
                 c.expireDate = md.add(Duration(days: sl));
@@ -1004,7 +1005,7 @@ class _MealLogTabState extends State<MealLogTab> {
 }
 
 // ==========================================
-// 2. 캘린더 화면 (식단계획 민트 구분 & 수정 팝업 복구)
+// 2. 캘린더 화면
 // ==========================================
 class MealCalendarTab extends StatefulWidget {
   final List<MealLog> mealLogs;
@@ -1066,7 +1067,6 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
     return news;
   }
 
-  // 식단 수정 다이얼로그 복구
   void _showEditMealDialog(MealLog log) {
     MealType currentType = log.mealType;
     TimeOfDay currentTime = TimeOfDay(hour: log.time.hour, minute: log.time.minute);
@@ -1236,7 +1236,6 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
-                          // 식단계획(isPlanned)은 민트색 테두리로 시각 구분
                           side: BorderSide(
                             color: l.isPlanned
                                 ? const Color(0xFF3EB489)
@@ -1261,7 +1260,6 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                                       ),
                                       const SizedBox(width: 6),
                                       Text('${l.time.hour.toString().padLeft(2, '0')}:${l.time.minute.toString().padLeft(2, '0')}', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-                                      // 식단계획 민트색 뱃지
                                       if (l.isPlanned) ...[
                                         const SizedBox(width: 6),
                                         Container(
@@ -1276,7 +1274,6 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                                     children: [
                                       Text('${l.totalGrams}g', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                                       const SizedBox(width: 4),
-                                      // 수정/삭제 팝업 메뉴 복구
                                       PopupMenuButton<String>(
                                         icon: const Icon(Icons.more_vert, size: 18, color: Colors.grey),
                                         padding: EdgeInsets.zero,
@@ -1444,7 +1441,7 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
 }
 
 // ==========================================
-// 3. 큐브 보관함 화면
+// 3. 큐브 보관함 화면 (+ 새 큐브 상단 고정 & 수정/삭제 팝업)
 // ==========================================
 class CubeStockTab extends StatefulWidget {
   final List<CubeItem> cubes;
@@ -1462,6 +1459,151 @@ class CubeStockTab extends StatefulWidget {
 class _CubeStockTabState extends State<CubeStockTab> {
   FoodCategory? _selCat;
 
+  void _showAddDialog() {
+    final nCtrl = TextEditingController();
+    final weightCtrl = TextEditingController(text: '10');
+    final qtyCtrl = TextEditingController(text: '6');
+    FoodCategory cat = FoodCategory.vegetable;
+    DateTime mDate = DateTime.now();
+    int shelfDays = 7;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDState) => AlertDialog(
+          title: const Text('새 큐브 등록', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: nCtrl, decoration: const InputDecoration(labelText: '식재료명 (예: 감자, 닭고기)')),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<FoodCategory>(
+                  value: cat,
+                  decoration: const InputDecoration(labelText: '카테고리'),
+                  items: FoodCategory.values.map((c) => DropdownMenuItem(value: c, child: Text(c.label))).toList(),
+                  onChanged: (v) => setDState(() => cat = v!),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(child: TextField(controller: weightCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '1개 용량 (g)'))),
+                    const SizedBox(width: 8),
+                    Expanded(child: TextField(controller: qtyCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '제작 개수'))),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('제조일: ${mDate.month}.${mDate.day}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    TextButton.icon(
+                      icon: const Icon(Icons.calendar_today, size: 14),
+                      label: const Text('날짜 선택'),
+                      onPressed: () async {
+                        final p = await showDatePicker(context: context, initialDate: mDate, firstDate: DateTime.now().subtract(const Duration(days: 30)), lastDate: DateTime.now());
+                        if (p != null) setDState(() => mDate = p);
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF3EB489), foregroundColor: Colors.white),
+              onPressed: () {
+                if (nCtrl.text.trim().isEmpty) return;
+                widget.onAddCube(CubeItem(
+                  id: DateTime.now().millisecondsSinceEpoch.toString(),
+                  name: nCtrl.text.trim(),
+                  category: cat,
+                  unitWeight: int.tryParse(weightCtrl.text) ?? 10,
+                  quantity: int.tryParse(qtyCtrl.text) ?? 6,
+                  madeDate: mDate,
+                  expireDate: mDate.add(Duration(days: shelfDays)),
+                ));
+                Navigator.pop(ctx);
+              },
+              child: const Text('저장'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showEditDialog(CubeItem c) {
+    final nCtrl = TextEditingController(text: c.name);
+    final weightCtrl = TextEditingController(text: '${c.unitWeight}');
+    final qtyCtrl = TextEditingController(text: '${c.quantity}');
+    FoodCategory cat = c.category;
+    DateTime mDate = c.madeDate;
+    int shelfDays = c.expireDate.difference(c.madeDate).inDays;
+    if (shelfDays <= 0) shelfDays = 7;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDState) => AlertDialog(
+          title: Text('${c.name} 큐브 정보 수정', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: nCtrl, decoration: const InputDecoration(labelText: '식재료명')),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<FoodCategory>(
+                  value: cat,
+                  decoration: const InputDecoration(labelText: '카테고리'),
+                  items: FoodCategory.values.map((catItem) => DropdownMenuItem(value: catItem, child: Text(catItem.label))).toList(),
+                  onChanged: (v) => setDState(() => cat = v!),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(child: TextField(controller: weightCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '1개 용량 (g)'))),
+                    const SizedBox(width: 8),
+                    Expanded(child: TextField(controller: qtyCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '현재 잔여 수량'))),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('제조일: ${mDate.month}.${mDate.day}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    TextButton.icon(
+                      icon: const Icon(Icons.calendar_today, size: 14),
+                      label: const Text('날짜 변경'),
+                      onPressed: () async {
+                        final p = await showDatePicker(context: context, initialDate: mDate, firstDate: DateTime.now().subtract(const Duration(days: 60)), lastDate: DateTime.now());
+                        if (p != null) setDState(() => mDate = p);
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF3EB489), foregroundColor: Colors.white),
+              onPressed: () {
+                if (nCtrl.text.trim().isEmpty) return;
+                widget.onEditCube(c, nCtrl.text.trim(), cat, int.tryParse(weightCtrl.text) ?? c.unitWeight, int.tryParse(qtyCtrl.text) ?? c.quantity, mDate, shelfDays);
+                Navigator.pop(ctx);
+              },
+              child: const Text('수정 완료'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final filtered = _selCat == null ? widget.cubes : widget.cubes.where((c) => c.category == _selCat).toList();
@@ -1470,6 +1612,7 @@ class _CubeStockTabState extends State<CubeStockTab> {
       backgroundColor: const Color(0xFFF4F9F6),
       body: Column(
         children: [
+          // 카테고리 필터 칩
           Container(
             color: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1503,6 +1646,25 @@ class _CubeStockTabState extends State<CubeStockTab> {
               ),
             ),
           ),
+          // 큐브 추가 버튼: 화면 하단 플로팅 대신 상단 바로 배치하여 큐브 수량 조절 버튼 가림 해결
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: SizedBox(
+              width: double.infinity,
+              height: 40,
+              child: ElevatedButton.icon(
+                onPressed: _showAddDialog,
+                icon: const Icon(Icons.add_circle_outline, size: 18),
+                label: const Text('새 큐브 등록', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF3EB489),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              ),
+            ),
+          ),
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.all(14),
@@ -1523,20 +1685,42 @@ class _CubeStockTabState extends State<CubeStockTab> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                              decoration: BoxDecoration(color: c.category.bgColor, borderRadius: BorderRadius.circular(4)),
-                              child: Text(c.category.label, style: TextStyle(color: c.category.textColor, fontSize: 10, fontWeight: FontWeight.bold)),
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                  decoration: BoxDecoration(color: c.category.bgColor, borderRadius: BorderRadius.circular(4)),
+                                  child: Text(c.category.label, style: TextStyle(color: c.category.textColor, fontSize: 10, fontWeight: FontWeight.bold)),
+                                ),
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                  decoration: BoxDecoration(color: c.statusBgColor, borderRadius: BorderRadius.circular(4)),
+                                  child: Text(
+                                    c.dDayText,
+                                    style: TextStyle(color: c.statusColor, fontSize: 10, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                              decoration: BoxDecoration(color: c.statusBgColor, borderRadius: BorderRadius.circular(4)),
-                              child: Text(
-                                c.dDayText,
-                                style: TextStyle(color: c.statusColor, fontSize: 10, fontWeight: FontWeight.bold),
-                              ),
+                            // 보관함 큐브 수정 / 삭제 팝업 메뉴 복원
+                            PopupMenuButton<String>(
+                              icon: const Icon(Icons.more_vert, size: 18, color: Colors.grey),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              onSelected: (val) {
+                                if (val == 'edit') {
+                                  _showEditDialog(c);
+                                } else if (val == 'delete') {
+                                  widget.onDeleteCube(c);
+                                }
+                              },
+                              itemBuilder: (context) => [
+                                const PopupMenuItem(value: 'edit', child: Text('수정', style: TextStyle(fontSize: 13))),
+                                const PopupMenuItem(value: 'delete', child: Text('삭제/폐기', style: TextStyle(fontSize: 13, color: Colors.red))),
+                              ],
                             ),
                           ],
                         ),
@@ -1569,64 +1753,19 @@ class _CubeStockTabState extends State<CubeStockTab> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: const Color(0xFF3EB489),
-        foregroundColor: Colors.white,
-        onPressed: () {
-          final nCtrl = TextEditingController();
-          FoodCategory cat = FoodCategory.vegetable;
-          showDialog(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('큐브 추가'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(controller: nCtrl, decoration: const InputDecoration(labelText: '이름')),
-                  DropdownButtonFormField<FoodCategory>(
-                    value: cat,
-                    items: FoodCategory.values.map((e) => DropdownMenuItem(value: e, child: Text(e.label))).toList(),
-                    onChanged: (v) => cat = v!,
-                  ),
-                ],
-              ),
-              actions: [
-                ElevatedButton(
-                  onPressed: () {
-                    if (nCtrl.text.isEmpty) return;
-                    widget.onAddCube(CubeItem(
-                      id: DateTime.now().millisecondsSinceEpoch.toString(),
-                      name: nCtrl.text.trim(),
-                      category: cat,
-                      unitWeight: 10,
-                      quantity: 6,
-                      madeDate: DateTime.now(),
-                      expireDate: DateTime.now().add(const Duration(days: 7)),
-                    ));
-                    Navigator.pop(ctx);
-                  },
-                  child: const Text('저장'),
-                ),
-              ],
-            ),
-          );
-        },
-        label: const Text('큐브 추가'),
-        icon: const Icon(Icons.add),
-      ),
     );
   }
 }
 
 // ==========================================
-// 4. 제작 필요 화면 (현재 재고 3개 이하 소진 임박 / 상단 칩 전체, 보유, 미보유)
+// 4. 제작 필요 화면 (상세 제작 팝업: 중량, 개수, 날짜 지정)
 // ==========================================
 enum RestockFilter { all, owned, unowned }
 
 class RestockPlanTab extends StatefulWidget {
   final List<CubeItem> cubes;
   final List<MealLog> mealLogs;
-  final Function(CubeItem, int, DateTime, int) onRestock;
+  final Function(CubeItem, int, int, DateTime, int) onRestock;
 
   const RestockPlanTab({super.key, required this.cubes, required this.mealLogs, required this.onRestock});
 
@@ -1636,6 +1775,67 @@ class RestockPlanTab extends StatefulWidget {
 
 class _RestockPlanTabState extends State<RestockPlanTab> {
   RestockFilter _filter = RestockFilter.all;
+
+  void _showRestockDialog(CubeItem c) {
+    final weightCtrl = TextEditingController(text: '${c.unitWeight}');
+    final qtyCtrl = TextEditingController(text: '6');
+    DateTime mDate = DateTime.now();
+    int shelfDays = 7;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDState) => AlertDialog(
+          title: Text('${c.name} 제작 완료 등록', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(c.isPlannedOnly ? '식단 계획을 위해 등록했던 재료입니다. 제작 정보를 입력하면 보관함의 실물 큐브로 등록됩니다.' : '새로 제작한 정보를 입력하면 보관함 재고와 소비기한이 갱신됩니다.', style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(child: TextField(controller: weightCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '1개 용량 (g)'))),
+                    const SizedBox(width: 8),
+                    Expanded(child: TextField(controller: qtyCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '만든 개수'))),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('제조일: ${mDate.month}.${mDate.day}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    TextButton.icon(
+                      icon: const Icon(Icons.calendar_today, size: 14),
+                      label: const Text('날짜 변경'),
+                      onPressed: () async {
+                        final p = await showDatePicker(context: context, initialDate: mDate, firstDate: DateTime.now().subtract(const Duration(days: 30)), lastDate: DateTime.now());
+                        if (p != null) setDState(() => mDate = p);
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF3EB489), foregroundColor: Colors.white),
+              onPressed: () {
+                final w = int.tryParse(weightCtrl.text) ?? c.unitWeight;
+                final q = int.tryParse(qtyCtrl.text) ?? 6;
+                widget.onRestock(c, w, q, mDate, shelfDays);
+                Navigator.pop(ctx);
+              },
+              child: const Text('보관함에 반영'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1706,9 +1906,9 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
         final dl = nextUseDate != null ? '${nextUseDate.month}월 ${nextUseDate.day}일' : '${cube.expireDate.month}월 ${cube.expireDate.day}일';
         items.add(_PlanDisplayItem(
           cube: cube,
-          urgency: '소진 임박', // '(잔여 #개)' 제거 및 현재 재고 3개 이하 적용
+          urgency: '소진 임박',
           deadline: dl,
-          color: const Color(0xFFE53935), // 빨간색
+          color: const Color(0xFFE53935),
           score: -80 + (nextUseDate != null ? nextUseDate.difference(today).inDays : 10),
           isUnowned: false,
         ));
@@ -1717,7 +1917,6 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
 
     items.sort((a, b) => a.score.compareTo(b.score));
 
-    // 전체 / 보유 / 미보유 필터링
     final filteredItems = items.where((i) {
       if (_filter == RestockFilter.owned) return !i.isUnowned;
       if (_filter == RestockFilter.unowned) return i.isUnowned;
@@ -1731,7 +1930,6 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 상단 필터 칩: 전체 / 보유 / 미보유
             Row(
               children: [
                 _buildFilterButton('전체', RestockFilter.all),
@@ -1796,7 +1994,7 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
                                     foregroundColor: Colors.white,
                                     visualDensity: VisualDensity.compact,
                                   ),
-                                  onPressed: () => widget.onRestock(c, 6, DateTime.now(), 7),
+                                  onPressed: () => _showRestockDialog(c),
                                   child: const Text('제작 완료', style: TextStyle(fontSize: 11)),
                                 ),
                               ],
