@@ -113,7 +113,7 @@ class CubeItem {
   }
 
   String get dDayText {
-    if (isPlannedOnly) return '미보유(제작필요)';
+    if (isPlannedOnly) return '미보유';
     final d = daysRemaining;
     if (d < 0) return '만료(D+${-d})';
     if (d == 0) return 'D-Day';
@@ -213,7 +213,7 @@ class MainNavigationScreen extends StatefulWidget {
 }
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
-  int _currentTabIndex = 0;
+  int _currentTabIndex = 0; // 0번 캘린더 기본
   bool _isLoading = true;
 
   List<CubeItem> _cubes = [];
@@ -246,7 +246,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           unitWeight: 30,
           quantity: 6,
           madeDate: now.subtract(const Duration(days: 2)),
-          expireDate: now.add(const Duration(days: 5)),
+          expireDate: now.add(const Duration(days: 12)),
         ),
         CubeItem(
           id: '2',
@@ -255,7 +255,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           unitWeight: 10,
           quantity: 3,
           madeDate: now.subtract(const Duration(days: 3)),
-          expireDate: now.add(const Duration(days: 4)),
+          expireDate: now.add(const Duration(days: 11)),
         ),
       ];
     }
@@ -645,7 +645,7 @@ class _MealLogTabState extends State<MealLogTab> {
                   unitWeight: int.tryParse(weightCtrl.text) ?? 10,
                   quantity: 0,
                   madeDate: DateTime.now(),
-                  expireDate: DateTime.now().add(const Duration(days: 7)),
+                  expireDate: DateTime.now().add(const Duration(days: 14)), // 기본 14일
                   isPlannedOnly: true,
                 );
                 widget.onAddPlannedCube(newCube);
@@ -1441,7 +1441,7 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
 }
 
 // ==========================================
-// 3. 큐브 보관함 화면 (+ 새 큐브 상단 고정 & 수정/삭제 팝업)
+// 3. 큐브 보관함 화면 (보관 기한 3일/7일/14일 드롭다운 적용)
 // ==========================================
 class CubeStockTab extends StatefulWidget {
   final List<CubeItem> cubes;
@@ -1465,7 +1465,7 @@ class _CubeStockTabState extends State<CubeStockTab> {
     final qtyCtrl = TextEditingController(text: '6');
     FoodCategory cat = FoodCategory.vegetable;
     DateTime mDate = DateTime.now();
-    int shelfDays = 7;
+    int shelfDays = 14; // 기본값 14일(2주)
 
     showDialog(
       context: context,
@@ -1491,6 +1491,18 @@ class _CubeStockTabState extends State<CubeStockTab> {
                     const SizedBox(width: 8),
                     Expanded(child: TextField(controller: qtyCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '제작 개수'))),
                   ],
+                ),
+                const SizedBox(height: 10),
+                // 보관 기한 선택 드롭다운 (3일, 7일, 14일)
+                DropdownButtonFormField<int>(
+                  value: shelfDays,
+                  decoration: const InputDecoration(labelText: '보관 기한'),
+                  items: const [
+                    DropdownMenuItem(value: 3, child: Text('3일 (냉장)')),
+                    DropdownMenuItem(value: 7, child: Text('7일 (1주일 권장)')),
+                    DropdownMenuItem(value: 14, child: Text('14일 (2주)')),
+                  ],
+                  onChanged: (v) => setDState(() => shelfDays = v!),
                 ),
                 const SizedBox(height: 10),
                 Row(
@@ -1542,7 +1554,9 @@ class _CubeStockTabState extends State<CubeStockTab> {
     FoodCategory cat = c.category;
     DateTime mDate = c.madeDate;
     int shelfDays = c.expireDate.difference(c.madeDate).inDays;
-    if (shelfDays <= 0) shelfDays = 7;
+    if (![3, 7, 14].contains(shelfDays)) {
+      shelfDays = 14;
+    }
 
     showDialog(
       context: context,
@@ -1568,6 +1582,18 @@ class _CubeStockTabState extends State<CubeStockTab> {
                     const SizedBox(width: 8),
                     Expanded(child: TextField(controller: qtyCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '현재 잔여 수량'))),
                   ],
+                ),
+                const SizedBox(height: 10),
+                // 수정 시 보관 기한 드롭다운
+                DropdownButtonFormField<int>(
+                  value: shelfDays,
+                  decoration: const InputDecoration(labelText: '보관 기한'),
+                  items: const [
+                    DropdownMenuItem(value: 3, child: Text('3일 (냉장)')),
+                    DropdownMenuItem(value: 7, child: Text('7일 (1주일 권장)')),
+                    DropdownMenuItem(value: 14, child: Text('14일 (2주)')),
+                  ],
+                  onChanged: (v) => setDState(() => shelfDays = v!),
                 ),
                 const SizedBox(height: 10),
                 Row(
@@ -1612,7 +1638,6 @@ class _CubeStockTabState extends State<CubeStockTab> {
       backgroundColor: const Color(0xFFF4F9F6),
       body: Column(
         children: [
-          // 카테고리 필터 칩
           Container(
             color: Colors.white,
             padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1646,7 +1671,6 @@ class _CubeStockTabState extends State<CubeStockTab> {
               ),
             ),
           ),
-          // 큐브 추가 버튼: 화면 하단 플로팅 대신 상단 바로 배치하여 큐브 수량 조절 버튼 가림 해결
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
             child: SizedBox(
@@ -1705,7 +1729,6 @@ class _CubeStockTabState extends State<CubeStockTab> {
                                 ),
                               ],
                             ),
-                            // 보관함 큐브 수정 / 삭제 팝업 메뉴 복원
                             PopupMenuButton<String>(
                               icon: const Icon(Icons.more_vert, size: 18, color: Colors.grey),
                               padding: EdgeInsets.zero,
@@ -1758,7 +1781,7 @@ class _CubeStockTabState extends State<CubeStockTab> {
 }
 
 // ==========================================
-// 4. 제작 필요 화면 (상세 제작 팝업: 중량, 개수, 날짜 지정)
+// 4. 제작 필요 화면
 // ==========================================
 enum RestockFilter { all, owned, unowned }
 
@@ -1780,7 +1803,7 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
     final weightCtrl = TextEditingController(text: '${c.unitWeight}');
     final qtyCtrl = TextEditingController(text: '6');
     DateTime mDate = DateTime.now();
-    int shelfDays = 7;
+    int shelfDays = 14; // 기본 14일(2주)
 
     showDialog(
       context: context,
@@ -1800,6 +1823,18 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
                     const SizedBox(width: 8),
                     Expanded(child: TextField(controller: qtyCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '만든 개수'))),
                   ],
+                ),
+                const SizedBox(height: 10),
+                // 제작 완료 시 보관 기한 드롭다운 (3일, 7일, 14일)
+                DropdownButtonFormField<int>(
+                  value: shelfDays,
+                  decoration: const InputDecoration(labelText: '보관 기한'),
+                  items: const [
+                    DropdownMenuItem(value: 3, child: Text('3일 (냉장)')),
+                    DropdownMenuItem(value: 7, child: Text('7일 (1주일 권장)')),
+                    DropdownMenuItem(value: 14, child: Text('14일 (2주)')),
+                  ],
+                  onChanged: (v) => setDState(() => shelfDays = v!),
                 ),
                 const SizedBox(height: 10),
                 Row(
@@ -1850,7 +1885,6 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
     List<_PlanDisplayItem> items = [];
 
     for (var cube in widget.cubes) {
-      // 1. 미보유 신규 큐브
       if (cube.isPlannedOnly) {
         DateTime? targetDate;
         for (var l in futureLogs) {
@@ -1874,7 +1908,6 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
         if (l.cubeUsage.containsKey(cube.id)) { nextUseDate = l.time; break; }
       }
 
-      // 2. 현재 재고 0개
       if (curQty == 0) {
         final dl = nextUseDate != null ? '${nextUseDate.month}월 ${nextUseDate.day}일' : '즉시 제작';
         items.add(_PlanDisplayItem(
@@ -1888,7 +1921,6 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
         continue;
       }
 
-      // 3. 소비기한 만료
       if (cube.daysRemaining < 0) {
         items.add(_PlanDisplayItem(
           cube: cube,
@@ -1901,7 +1933,6 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
         continue;
       }
 
-      // 4. '현재 재고' 기준 3개 이하일 때만 '소진 임박'
       if (curQty <= 3) {
         final dl = nextUseDate != null ? '${nextUseDate.month}월 ${nextUseDate.day}일' : '${cube.expireDate.month}월 ${cube.expireDate.day}일';
         items.add(_PlanDisplayItem(
