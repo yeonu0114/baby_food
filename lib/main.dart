@@ -213,7 +213,7 @@ class MainNavigationScreen extends StatefulWidget {
 }
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
-  int _currentTabIndex = 0; // 0번 캘린더 기본
+  int _currentTabIndex = 0; // 0번: 캘린더 기본
   bool _isLoading = true;
 
   List<CubeItem> _cubes = [];
@@ -486,6 +486,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           // 2번: 보관함
           CubeStockTab(
             cubes: _cubes,
+            mealLogs: _mealLogs,
             onUpdateQty: (c, d) {
               setState(() => c.quantity = (c.quantity + d).clamp(0, 999));
               _saveData();
@@ -569,7 +570,7 @@ String calculateDdayString(DateTime targetDate, DateTime? birthDate, DateTime? w
 }
 
 // ==========================================
-// 1. 식단 기록 화면
+// 1. 식단 기록 화면 ('대변 X' 배변 태그 추가)
 // ==========================================
 class MealLogTab extends StatefulWidget {
   final List<CubeItem> cubes;
@@ -600,7 +601,8 @@ class _MealLogTabState extends State<MealLogTab> {
 
   final List<String> _attitudeTags = ['완식', '거의 다 먹음', '절반 남김', '뱉어냄'];
   final List<String> _skinTags = ['피부 정상', '입주변 붉어짐', '두드러기/발진', '눈 비빔/가려움'];
-  final List<String> _stoolTags = ['황금변', '된변', '무른변', '설사'];
+  // 배변 상태에 '대변 X' 추가
+  final List<String> _stoolTags = ['황금변', '된변', '무른변', '설사', '대변 X'];
   final Set<String> _activeTags = {};
 
   int get _repeatDays => DateTime(_endDate.year, _endDate.month, _endDate.day).difference(DateTime(_startDate.year, _startDate.month, _startDate.day)).inDays + 1;
@@ -645,7 +647,7 @@ class _MealLogTabState extends State<MealLogTab> {
                   unitWeight: int.tryParse(weightCtrl.text) ?? 10,
                   quantity: 0,
                   madeDate: DateTime.now(),
-                  expireDate: DateTime.now().add(const Duration(days: 14)), // 기본 14일
+                  expireDate: DateTime.now().add(const Duration(days: 14)),
                   isPlannedOnly: true,
                 );
                 widget.onAddPlannedCube(newCube);
@@ -909,7 +911,7 @@ class _MealLogTabState extends State<MealLogTab> {
           ),
           const SizedBox(height: 16),
 
-          // 4. 빠른 반응 체크
+          // 4. 빠른 반응 체크 ('대변 X' 칩 포함)
           if (!_isFutureDate && _repeatDays == 1) ...[
             Container(
               padding: const EdgeInsets.all(16),
@@ -1005,7 +1007,7 @@ class _MealLogTabState extends State<MealLogTab> {
 }
 
 // ==========================================
-// 2. 캘린더 화면
+// 2. 캘린더 화면 ('대변 X' 배변 태그 추가)
 // ==========================================
 class MealCalendarTab extends StatefulWidget {
   final List<MealLog> mealLogs;
@@ -1029,7 +1031,8 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
   late DateTime _selectedDate;
 
   final List<String> _skinTags = ['피부 정상', '입주변 붉어짐', '두드러기/발진', '눈 비빔/가려움'];
-  final List<String> _stoolTags = ['황금변', '된변', '무른변', '설사'];
+  // 캘린더 사후 반응 모달에도 '대변 X' 추가
+  final List<String> _stoolTags = ['황금변', '된변', '무른변', '설사', '대변 X'];
   final List<String> _attitudeTags = ['완식', '거의 다 먹음', '절반 남김', '뱉어냄'];
 
   @override
@@ -1441,16 +1444,17 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
 }
 
 // ==========================================
-// 3. 큐브 보관함 화면 (보관 기한 3일/7일/14일 드롭다운 적용)
+// 3. 큐브 보관함 화면
 // ==========================================
 class CubeStockTab extends StatefulWidget {
   final List<CubeItem> cubes;
+  final List<MealLog> mealLogs;
   final Function(CubeItem, int) onUpdateQty;
   final Function(CubeItem) onAddCube;
   final Function(CubeItem, String, FoodCategory, int, int, DateTime, int) onEditCube;
   final Function(CubeItem) onDeleteCube;
 
-  const CubeStockTab({super.key, required this.cubes, required this.onUpdateQty, required this.onAddCube, required this.onEditCube, required this.onDeleteCube});
+  const CubeStockTab({super.key, required this.cubes, required this.mealLogs, required this.onUpdateQty, required this.onAddCube, required this.onEditCube, required this.onDeleteCube});
 
   @override
   State<CubeStockTab> createState() => _CubeStockTabState();
@@ -1465,7 +1469,7 @@ class _CubeStockTabState extends State<CubeStockTab> {
     final qtyCtrl = TextEditingController(text: '6');
     FoodCategory cat = FoodCategory.vegetable;
     DateTime mDate = DateTime.now();
-    int shelfDays = 14; // 기본값 14일(2주)
+    int shelfDays = 14;
 
     showDialog(
       context: context,
@@ -1493,7 +1497,6 @@ class _CubeStockTabState extends State<CubeStockTab> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                // 보관 기한 선택 드롭다운 (3일, 7일, 14일)
                 DropdownButtonFormField<int>(
                   value: shelfDays,
                   decoration: const InputDecoration(labelText: '보관 기한'),
@@ -1554,9 +1557,7 @@ class _CubeStockTabState extends State<CubeStockTab> {
     FoodCategory cat = c.category;
     DateTime mDate = c.madeDate;
     int shelfDays = c.expireDate.difference(c.madeDate).inDays;
-    if (![3, 7, 14].contains(shelfDays)) {
-      shelfDays = 14;
-    }
+    if (![3, 7, 14].contains(shelfDays)) shelfDays = 14;
 
     showDialog(
       context: context,
@@ -1584,7 +1585,6 @@ class _CubeStockTabState extends State<CubeStockTab> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                // 수정 시 보관 기한 드롭다운
                 DropdownButtonFormField<int>(
                   value: shelfDays,
                   decoration: const InputDecoration(labelText: '보관 기한'),
@@ -1632,7 +1632,36 @@ class _CubeStockTabState extends State<CubeStockTab> {
 
   @override
   Widget build(BuildContext context) {
-    final filtered = _selCat == null ? widget.cubes : widget.cubes.where((c) => c.category == _selCat).toList();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    final futureLogs = widget.mealLogs.where((l) {
+      final d = DateTime(l.time.year, l.time.month, l.time.day);
+      return d.isAfter(today) || d.isAtSameMomentAs(today);
+    }).toList()..sort((a, b) => a.time.compareTo(b.time));
+
+    DateTime getFirstNeedDate(String cubeId) {
+      for (var l in futureLogs) {
+        if (l.cubeUsage.containsKey(cubeId)) return l.time;
+      }
+      return DateTime(2099, 12, 31);
+    }
+
+    final filtered = _selCat == null ? List<CubeItem>.from(widget.cubes) : widget.cubes.where((c) => c.category == _selCat).toList();
+
+    filtered.sort((a, b) {
+      if (!a.isPlannedOnly && b.isPlannedOnly) return -1;
+      if (a.isPlannedOnly && !b.isPlannedOnly) return 1;
+
+      if (!a.isPlannedOnly && !b.isPlannedOnly) {
+        return a.madeDate.compareTo(b.madeDate);
+      } else {
+        final dateA = getFirstNeedDate(a.id);
+        final dateB = getFirstNeedDate(b.id);
+        final cmp = dateA.compareTo(dateB);
+        return cmp != 0 ? cmp : a.createdAt.compareTo(b.createdAt);
+      }
+    });
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F9F6),
@@ -1758,7 +1787,9 @@ class _CubeStockTabState extends State<CubeStockTab> {
                                 children: [
                                   Text(c.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
                                   if (!c.isPlannedOnly)
-                                    Text('개당 ${c.unitWeight}g · ${c.quantity}개 남음', style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                                    Text('개당 ${c.unitWeight}g · ${c.quantity}개 남음 (제조: ${c.madeDate.month}.${c.madeDate.day})', style: const TextStyle(fontSize: 11, color: Colors.grey))
+                                  else
+                                    Text('1회 권장량 ${c.unitWeight}g', style: const TextStyle(fontSize: 11, color: Colors.grey)),
                                 ],
                               ),
                             ),
@@ -1803,7 +1834,7 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
     final weightCtrl = TextEditingController(text: '${c.unitWeight}');
     final qtyCtrl = TextEditingController(text: '6');
     DateTime mDate = DateTime.now();
-    int shelfDays = 14; // 기본 14일(2주)
+    int shelfDays = 14;
 
     showDialog(
       context: context,
@@ -1825,7 +1856,6 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                // 제작 완료 시 보관 기한 드롭다운 (3일, 7일, 14일)
                 DropdownButtonFormField<int>(
                   value: shelfDays,
                   decoration: const InputDecoration(labelText: '보관 기한'),
