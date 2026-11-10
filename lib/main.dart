@@ -213,7 +213,7 @@ class MainNavigationScreen extends StatefulWidget {
 }
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
-  int _currentTabIndex = 0; // 0번: 캘린더 기본
+  int _currentTabIndex = 0; // 0번 캘린더 기본
   bool _isLoading = true;
 
   List<CubeItem> _cubes = [];
@@ -570,7 +570,7 @@ String calculateDdayString(DateTime targetDate, DateTime? birthDate, DateTime? w
 }
 
 // ==========================================
-// 1. 식단 기록 화면 ('대변 X' 배변 태그 추가)
+// 1. 식단 기록 화면
 // ==========================================
 class MealLogTab extends StatefulWidget {
   final List<CubeItem> cubes;
@@ -601,7 +601,6 @@ class _MealLogTabState extends State<MealLogTab> {
 
   final List<String> _attitudeTags = ['완식', '거의 다 먹음', '절반 남김', '뱉어냄'];
   final List<String> _skinTags = ['피부 정상', '입주변 붉어짐', '두드러기/발진', '눈 비빔/가려움'];
-  // 배변 상태에 '대변 X' 추가
   final List<String> _stoolTags = ['황금변', '된변', '무른변', '설사', '대변 X'];
   final Set<String> _activeTags = {};
 
@@ -911,7 +910,7 @@ class _MealLogTabState extends State<MealLogTab> {
           ),
           const SizedBox(height: 16),
 
-          // 4. 빠른 반응 체크 ('대변 X' 칩 포함)
+          // 4. 빠른 반응 체크
           if (!_isFutureDate && _repeatDays == 1) ...[
             Container(
               padding: const EdgeInsets.all(16),
@@ -1007,7 +1006,7 @@ class _MealLogTabState extends State<MealLogTab> {
 }
 
 // ==========================================
-// 2. 캘린더 화면 ('대변 X' 배변 태그 추가)
+// 2. 캘린더 화면 (오늘 날짜 시각 구분 강화)
 // ==========================================
 class MealCalendarTab extends StatefulWidget {
   final List<MealLog> mealLogs;
@@ -1031,7 +1030,6 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
   late DateTime _selectedDate;
 
   final List<String> _skinTags = ['피부 정상', '입주변 붉어짐', '두드러기/발진', '눈 비빔/가려움'];
-  // 캘린더 사후 반응 모달에도 '대변 X' 추가
   final List<String> _stoolTags = ['황금변', '된변', '무른변', '설사', '대변 X'];
   final List<String> _attitudeTags = ['완식', '거의 다 먹음', '절반 남김', '뱉어냄'];
 
@@ -1379,21 +1377,43 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
     final offset = _focusedDate.weekday % 7;
     final start = _focusedDate.subtract(Duration(days: offset));
     final days = List.generate(7, (i) => start.add(Duration(days: i)));
+    final now = DateTime.now();
 
     return Row(
       children: days.map((d) {
         final isSel = _isSameDay(d, _selectedDate);
+        final isToday = _isSameDay(d, now);
+
         return Expanded(
           child: InkWell(
             onTap: () => setState(() => _selectedDate = d),
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 4),
-              decoration: BoxDecoration(color: isSel ? const Color(0xFFE8F8F2) : Colors.transparent, borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(
+                color: isSel ? const Color(0xFF3EB489) : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+                border: (!isSel && isToday) ? Border.all(color: const Color(0xFF3EB489), width: 1.5) : null,
+              ),
               child: Column(
                 children: [
-                  Text('${d.day}', style: TextStyle(fontSize: 12, fontWeight: isSel ? FontWeight.bold : FontWeight.normal, color: isSel ? const Color(0xFF3EB489) : Colors.black87)),
+                  Text(
+                    '${d.day}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: (isSel || isToday) ? FontWeight.bold : FontWeight.normal,
+                      color: isSel ? Colors.white : (isToday ? const Color(0xFF3EB489) : Colors.black87),
+                    ),
+                  ),
                   if (_getLogsForDate(d).isNotEmpty)
-                    Container(margin: const EdgeInsets.only(top: 2), width: 4, height: 4, decoration: const BoxDecoration(color: Color(0xFF3EB489), shape: BoxShape.circle)),
+                    Container(
+                      margin: const EdgeInsets.only(top: 2),
+                      width: 4,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: isSel ? Colors.white : const Color(0xFF3EB489),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -1407,6 +1427,7 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
     final firstDay = DateTime(_focusedDate.year, _focusedDate.month, 1).weekday % 7;
     final totalDays = DateTime(_focusedDate.year, _focusedDate.month + 1, 0).day;
     final rows = ((firstDay + totalDays) / 7).ceil();
+    final now = DateTime.now();
 
     return Column(
       children: List.generate(rows, (r) {
@@ -1417,6 +1438,7 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
             if (day < 1 || day > totalDays) return const Expanded(child: SizedBox(height: 34));
             final d = DateTime(_focusedDate.year, _focusedDate.month, day);
             final isSel = _isSameDay(d, _selectedDate);
+            final isToday = _isSameDay(d, now);
 
             return Expanded(
               child: InkWell(
@@ -1424,13 +1446,32 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                 child: Container(
                   height: 34,
                   alignment: Alignment.center,
-                  decoration: BoxDecoration(color: isSel ? const Color(0xFF3EB489) : Colors.transparent, shape: BoxShape.circle),
+                  decoration: BoxDecoration(
+                    color: isSel ? const Color(0xFF3EB489) : Colors.transparent,
+                    shape: BoxShape.circle,
+                    border: (!isSel && isToday) ? Border.all(color: const Color(0xFF3EB489), width: 1.5) : null,
+                  ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text('$day', style: TextStyle(fontSize: 12, color: isSel ? Colors.white : Colors.black87)),
+                      Text(
+                        '$day',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: (isSel || isToday) ? FontWeight.bold : FontWeight.normal,
+                          color: isSel ? Colors.white : (isToday ? const Color(0xFF3EB489) : Colors.black87),
+                        ),
+                      ),
                       if (_getLogsForDate(d).isNotEmpty)
-                        Container(margin: const EdgeInsets.only(top: 1), width: 3, height: 3, decoration: BoxDecoration(color: isSel ? Colors.white : const Color(0xFF3EB489), shape: BoxShape.circle)),
+                        Container(
+                          margin: const EdgeInsets.only(top: 1),
+                          width: 3,
+                          height: 3,
+                          decoration: BoxDecoration(
+                            color: isSel ? Colors.white : const Color(0xFF3EB489),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -1812,7 +1853,7 @@ class _CubeStockTabState extends State<CubeStockTab> {
 }
 
 // ==========================================
-// 4. 제작 필요 화면
+// 4. 제작 필요 화면 (실제 다음 식단 예정일 기반 스마트 마감일 적용)
 // ==========================================
 enum RestockFilter { all, owned, unowned }
 
@@ -1907,6 +1948,7 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
+    // 오늘 이후의 식단 로그 (시간순 정렬)
     final futureLogs = widget.mealLogs.where((l) {
       final logDay = DateTime(l.time.year, l.time.month, l.time.day);
       return logDay.isAfter(today) || logDay.isAtSameMomentAs(today);
@@ -1915,6 +1957,7 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
     List<_PlanDisplayItem> items = [];
 
     for (var cube in widget.cubes) {
+      // 1. 미보유 신규 큐브 (처음 먹이는 신규 재료)
       if (cube.isPlannedOnly) {
         DateTime? targetDate;
         for (var l in futureLogs) {
@@ -1933,49 +1976,95 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
       }
 
       int curQty = cube.quantity;
-      DateTime? nextUseDate;
+
+      // 이 큐브가 앞으로 실제로 쓰이는 날짜들 찾기
+      List<DateTime> plannedUsageDates = [];
       for (var l in futureLogs) {
-        if (l.cubeUsage.containsKey(cube.id)) { nextUseDate = l.time; break; }
+        if (l.cubeUsage.containsKey(cube.id)) {
+          plannedUsageDates.add(l.time);
+        }
       }
 
+      // 2. 현재 재고 0개인 경우
       if (curQty == 0) {
-        final dl = nextUseDate != null ? '${nextUseDate.month}월 ${nextUseDate.day}일' : '즉시 제작';
+        final nextUse = plannedUsageDates.isNotEmpty ? plannedUsageDates.first : null;
+        final dl = nextUse != null
+            ? '${nextUse.month}월 ${nextUse.day}일'
+            : '식단 예정 없음 (소진 후 보충)';
         items.add(_PlanDisplayItem(
           cube: cube,
           urgency: '현재 재고 0개',
           deadline: dl,
           color: const Color(0xFFE53935),
-          score: -50,
+          score: nextUse != null ? nextUse.difference(today).inDays : 150,
           isUnowned: false,
         ));
         continue;
       }
 
+      // 3. 소비기한 만료된 경우
       if (cube.daysRemaining < 0) {
+        final nextUse = plannedUsageDates.isNotEmpty ? plannedUsageDates.first : null;
+        final dl = nextUse != null
+            ? '${nextUse.month}월 ${nextUse.day}일 (다음 식단 전)'
+            : '폐기 후 신규 제작';
         items.add(_PlanDisplayItem(
           cube: cube,
           urgency: '소비기한 만료',
-          deadline: '폐기 후 신규 제작',
+          deadline: dl,
           color: const Color(0xFFE65100),
-          score: -30,
+          score: nextUse != null ? nextUse.difference(today).inDays : -10,
           isUnowned: false,
         ));
         continue;
       }
 
+      // 4. 현재 재고 3개 이하 '소진 임박' (실제 다음 식단 예정일 기반 스마트 마감일)
       if (curQty <= 3) {
-        final dl = nextUseDate != null ? '${nextUseDate.month}월 ${nextUseDate.day}일' : '${cube.expireDate.month}월 ${cube.expireDate.day}일';
+        DateTime? nextNeedDate;
+
+        // 현재 남은 재고(curQty)를 향후 식단에서 하나씩 차감해 보며 완전히 바닥나는 날짜를 탐색
+        int tempQty = curQty;
+        for (var l in futureLogs) {
+          if (l.cubeUsage.containsKey(cube.id)) {
+            final used = l.cubeUsage[cube.id]!;
+            tempQty -= used;
+            // 재고가 바닥나서 새로 만든 큐브가 꼭 필요한 시점
+            if (tempQty <= 0) {
+              nextNeedDate = l.time;
+              break;
+            }
+          }
+        }
+
+        // 만약 당장 소진되지 않더라도 남아있는 큐브 수량이 작고 뒤에 식단이 있다면 그 날짜를 마감일로 설정
+        nextNeedDate ??= (plannedUsageDates.isNotEmpty ? plannedUsageDates.last : null);
+
+        String dl;
+        int score;
+
+        if (nextNeedDate != null) {
+          // 다음 식단이 있는 경우: 그 식단 날짜 전까지 제작
+          dl = '${nextNeedDate.month}월 ${nextNeedDate.day}일';
+          score = nextNeedDate.difference(today).inDays;
+        } else {
+          // 당분간 식단 계획이 아예 없는 경우: 보관 기한 만료일을 표시하되 조급하지 않게 안내
+          dl = '${cube.expireDate.month}월 ${cube.expireDate.day}일 (식단 미배정)';
+          score = 80 + cube.daysRemaining;
+        }
+
         items.add(_PlanDisplayItem(
           cube: cube,
           urgency: '소진 임박',
           deadline: dl,
           color: const Color(0xFFE53935),
-          score: -80 + (nextUseDate != null ? nextUseDate.difference(today).inDays : 10),
+          score: score,
           isUnowned: false,
         ));
       }
     }
 
+    // 마감일이 가까운 순서(score 오름차순) 정렬
     items.sort((a, b) => a.score.compareTo(b.score));
 
     final filteredItems = items.where((i) {
