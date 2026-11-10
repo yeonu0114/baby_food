@@ -213,7 +213,7 @@ class MainNavigationScreen extends StatefulWidget {
 }
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
-  int _currentTabIndex = 0; // 0번 캘린더 기본
+  int _currentTabIndex = 0;
   bool _isLoading = true;
 
   List<CubeItem> _cubes = [];
@@ -439,7 +439,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       body: IndexedStack(
         index: _currentTabIndex,
         children: [
-          // 0번: 캘린더
           MealCalendarTab(
             mealLogs: _mealLogs,
             cubes: _cubes,
@@ -472,7 +471,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               _saveData();
             },
           ),
-          // 1번: 식단 기록
           MealLogTab(
             cubes: _cubes,
             birthDate: _birthDate,
@@ -483,7 +481,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               _saveData();
             },
           ),
-          // 2번: 보관함
           CubeStockTab(
             cubes: _cubes,
             mealLogs: _mealLogs,
@@ -512,7 +509,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               _saveData();
             },
           ),
-          // 3번: 제작 필요
           RestockPlanTab(
             cubes: _cubes,
             mealLogs: _mealLogs,
@@ -1006,7 +1002,7 @@ class _MealLogTabState extends State<MealLogTab> {
 }
 
 // ==========================================
-// 2. 캘린더 화면 (오늘 날짜 시각 구분 강화)
+// 2. 캘린더 화면
 // ==========================================
 class MealCalendarTab extends StatefulWidget {
   final List<MealLog> mealLogs;
@@ -1681,9 +1677,11 @@ class _CubeStockTabState extends State<CubeStockTab> {
       return d.isAfter(today) || d.isAtSameMomentAs(today);
     }).toList()..sort((a, b) => a.time.compareTo(b.time));
 
-    DateTime getFirstNeedDate(String cubeId) {
+    DateTime getFirstNeedDate(CubeItem cube) {
       for (var l in futureLogs) {
-        if (l.cubeUsage.containsKey(cubeId)) return l.time;
+        if (l.cubeUsage.containsKey(cube.id) || l.ingredients.any((ing) => ing.contains(cube.name))) {
+          return l.time;
+        }
       }
       return DateTime(2099, 12, 31);
     }
@@ -1697,8 +1695,8 @@ class _CubeStockTabState extends State<CubeStockTab> {
       if (!a.isPlannedOnly && !b.isPlannedOnly) {
         return a.madeDate.compareTo(b.madeDate);
       } else {
-        final dateA = getFirstNeedDate(a.id);
-        final dateB = getFirstNeedDate(b.id);
+        final dateA = getFirstNeedDate(a);
+        final dateB = getFirstNeedDate(b);
         final cmp = dateA.compareTo(dateB);
         return cmp != 0 ? cmp : a.createdAt.compareTo(b.createdAt);
       }
@@ -1853,7 +1851,7 @@ class _CubeStockTabState extends State<CubeStockTab> {
 }
 
 // ==========================================
-// 4. 제작 필요 화면 (실제 다음 식단 예정일 기반 스마트 마감일 적용)
+// 4. 제작 필요 화면 (실제 계획 스케줄 완벽 추적 알고리즘)
 // ==========================================
 enum RestockFilter { all, owned, unowned }
 
@@ -1948,7 +1946,7 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    // 오늘 이후의 식단 로그 (시간순 정렬)
+    // 미래/당일 식단 로그 정렬
     final futureLogs = widget.mealLogs.where((l) {
       final logDay = DateTime(l.time.year, l.time.month, l.time.day);
       return logDay.isAfter(today) || logDay.isAtSameMomentAs(today);
@@ -1957,37 +1955,37 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
     List<_PlanDisplayItem> items = [];
 
     for (var cube in widget.cubes) {
-      // 1. 미보유 신규 큐브 (처음 먹이는 신규 재료)
-      if (cube.isPlannedOnly) {
-        DateTime? targetDate;
-        for (var l in futureLogs) {
-          if (l.cubeUsage.containsKey(cube.id)) { targetDate = l.time; break; }
+      // 해당 큐브가 쓰이는 미래 식단 목록 (ID 또는 재료명 일치 여부 확인)
+      List<MealLog> matchedLogs = [];
+      for (var l in futureLogs) {
+        final usesById = l.cubeUsage.containsKey(cube.id);
+        final usesByName = l.ingredients.any((ing) => ing.contains(cube.name));
+        if (usesById || usesByName) {
+          matchedLogs.add(l);
         }
+      }
+
+      // 1. 미보유 신규 큐브 (처음 시도하는 식재료)
+      if (cube.isPlannedOnly) {
+        final targetDate = matchedLogs.isNotEmpty ? matchedLogs.first.time : null;
         final dl = targetDate != null ? '${targetDate.month}월 ${targetDate.day}일' : '식단 전';
         items.add(_PlanDisplayItem(
           cube: cube,
           urgency: null,
           deadline: dl,
           color: const Color(0xFF8E24AA),
-          score: targetDate != null ? targetDate.difference(today).inDays : 99,
+          score: targetDate != null ? targetDate.difference(today).inDays : 999,
           isUnowned: true,
         ));
         continue;
       }
 
-      int curQty = cube.quantity;
+      final curQty = cube.quantity;
+      final isExpired = cube.daysRemaining < 0;
 
-      // 이 큐브가 앞으로 실제로 쓰이는 날짜들 찾기
-      List<DateTime> plannedUsageDates = [];
-      for (var l in futureLogs) {
-        if (l.cubeUsage.containsKey(cube.id)) {
-          plannedUsageDates.add(l.time);
-        }
-      }
-
-      // 2. 현재 재고 0개인 경우
+      // 2. 현재 재고 0개
       if (curQty == 0) {
-        final nextUse = plannedUsageDates.isNotEmpty ? plannedUsageDates.first : null;
+        final nextUse = matchedLogs.isNotEmpty ? matchedLogs.first.time : null;
         final dl = nextUse != null
             ? '${nextUse.month}월 ${nextUse.day}일'
             : '식단 예정 없음 (소진 후 보충)';
@@ -1996,15 +1994,15 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
           urgency: '현재 재고 0개',
           deadline: dl,
           color: const Color(0xFFE53935),
-          score: nextUse != null ? nextUse.difference(today).inDays : 150,
+          score: nextUse != null ? nextUse.difference(today).inDays : 900,
           isUnowned: false,
         ));
         continue;
       }
 
-      // 3. 소비기한 만료된 경우
-      if (cube.daysRemaining < 0) {
-        final nextUse = plannedUsageDates.isNotEmpty ? plannedUsageDates.first : null;
+      // 3. 소비기한 만료
+      if (isExpired) {
+        final nextUse = matchedLogs.isNotEmpty ? matchedLogs.first.time : null;
         final dl = nextUse != null
             ? '${nextUse.month}월 ${nextUse.day}일 (다음 식단 전)'
             : '폐기 후 신규 제작';
@@ -2013,44 +2011,42 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
           urgency: '소비기한 만료',
           deadline: dl,
           color: const Color(0xFFE65100),
-          score: nextUse != null ? nextUse.difference(today).inDays : -10,
+          score: nextUse != null ? nextUse.difference(today).inDays : 100,
           isUnowned: false,
         ));
         continue;
       }
 
-      // 4. 현재 재고 3개 이하 '소진 임박' (실제 다음 식단 예정일 기반 스마트 마감일)
+      // 4. 현재 재고 1~3개인 경우: '실제 다음 식단 예정일' 스마트 판정
       if (curQty <= 3) {
-        DateTime? nextNeedDate;
+        int simulatedQty = curQty;
+        DateTime? outOfStockDate; // 기존 재고가 다 떨어져 새로 만든 큐브가 꼭 필요한 날
 
-        // 현재 남은 재고(curQty)를 향후 식단에서 하나씩 차감해 보며 완전히 바닥나는 날짜를 탐색
-        int tempQty = curQty;
-        for (var l in futureLogs) {
-          if (l.cubeUsage.containsKey(cube.id)) {
-            final used = l.cubeUsage[cube.id]!;
-            tempQty -= used;
-            // 재고가 바닥나서 새로 만든 큐브가 꼭 필요한 시점
-            if (tempQty <= 0) {
-              nextNeedDate = l.time;
-              break;
-            }
+        for (var l in matchedLogs) {
+          int count = l.cubeUsage[cube.id] ?? 1;
+          simulatedQty -= count;
+          if (simulatedQty < 1) {
+            outOfStockDate = l.time;
+            break;
           }
         }
-
-        // 만약 당장 소진되지 않더라도 남아있는 큐브 수량이 작고 뒤에 식단이 있다면 그 날짜를 마감일로 설정
-        nextNeedDate ??= (plannedUsageDates.isNotEmpty ? plannedUsageDates.last : null);
 
         String dl;
         int score;
 
-        if (nextNeedDate != null) {
-          // 다음 식단이 있는 경우: 그 식단 날짜 전까지 제작
-          dl = '${nextNeedDate.month}월 ${nextNeedDate.day}일';
-          score = nextNeedDate.difference(today).inDays;
+        if (outOfStockDate != null) {
+          // 1) 기존 재고가 바닥나서 새 큐브가 필요한 식단 날짜가 있는 경우 (예: 11월 28일)
+          dl = '${outOfStockDate.month}월 ${outOfStockDate.day}일';
+          score = outOfStockDate.difference(today).inDays;
+        } else if (matchedLogs.isNotEmpty) {
+          // 2) 앞으로 먹을 계획은 있으나 기존 1~3개로 그 식단들을 다 커버할 수 있는 경우
+          final lastPlanned = matchedLogs.last.time;
+          dl = '${lastPlanned.month}월 ${lastPlanned.day}일 (식단 소진 후)';
+          score = lastPlanned.difference(today).inDays + 10;
         } else {
-          // 당분간 식단 계획이 아예 없는 경우: 보관 기한 만료일을 표시하되 조급하지 않게 안내
-          dl = '${cube.expireDate.month}월 ${cube.expireDate.day}일 (식단 미배정)';
-          score = 80 + cube.daysRemaining;
+          // 3) 향후 식단 계획에 아예 포함되어 있지 않은 경우 (미리 만들 필요 없음)
+          dl = '식단 예정 없음 (소진 후 보충)';
+          score = 800; // 정렬 순위를 뒤쪽으로 보냄
         }
 
         items.add(_PlanDisplayItem(
@@ -2064,7 +2060,7 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
       }
     }
 
-    // 마감일이 가까운 순서(score 오름차순) 정렬
+    // 제작 마감일이 당장 가까운 순(score 오름차순)으로 자동 정렬
     items.sort((a, b) => a.score.compareTo(b.score));
 
     final filteredItems = items.where((i) {
