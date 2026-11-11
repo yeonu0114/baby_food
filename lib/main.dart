@@ -213,7 +213,7 @@ class MainNavigationScreen extends StatefulWidget {
 }
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
-  int _currentTabIndex = 0;
+  int _currentTabIndex = 0; // 0: 캘린더 기본
   bool _isLoading = true;
 
   List<CubeItem> _cubes = [];
@@ -421,8 +421,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       return const Scaffold(body: Center(child: CircularProgressIndicator(color: Color(0xFF3EB489))));
     }
 
-    final restockCount = _cubes.where((c) => c.isPlannedOnly || c.quantity <= 3 || c.daysRemaining < 0).length;
-
     return Scaffold(
       appBar: AppBar(
         title: const Row(
@@ -439,17 +437,20 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       body: IndexedStack(
         index: _currentTabIndex,
         children: [
+          // 0번: 캘린더
           MealCalendarTab(
             mealLogs: _mealLogs,
             cubes: _cubes,
             birthDate: _birthDate,
             weaningStartDate: _weaningStartDate,
-            onEditMeal: (l, t, tm, r, g) {
+            onEditMealFull: (l, t, tm, r, g, usages, ings) {
               setState(() {
                 l.mealType = t;
                 l.time = tm;
                 l.reaction = r;
                 l.totalGrams = g;
+                l.cubeUsage = usages;
+                l.ingredients = ings;
               });
               _saveData();
             },
@@ -471,6 +472,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               _saveData();
             },
           ),
+          // 1번: 식단 기록
           MealLogTab(
             cubes: _cubes,
             birthDate: _birthDate,
@@ -481,6 +483,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               _saveData();
             },
           ),
+          // 2번: 보관함
           CubeStockTab(
             cubes: _cubes,
             mealLogs: _mealLogs,
@@ -509,6 +512,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               _saveData();
             },
           ),
+          // 3번: 제작 필요
           RestockPlanTab(
             cubes: _cubes,
             mealLogs: _mealLogs,
@@ -530,15 +534,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         indicatorColor: const Color(0xFFE8F8F2),
         backgroundColor: Colors.white,
         onDestinationSelected: (idx) => setState(() => _currentTabIndex = idx),
-        destinations: [
-          const NavigationDestination(icon: Icon(Icons.calendar_month_outlined), selectedIcon: Icon(Icons.calendar_month, color: Color(0xFF3EB489)), label: '캘린더'),
-          const NavigationDestination(icon: Icon(Icons.edit_note_outlined), selectedIcon: Icon(Icons.edit_note, color: Color(0xFF3EB489)), label: '식단 기록'),
-          const NavigationDestination(icon: Icon(Icons.kitchen_outlined), selectedIcon: Icon(Icons.kitchen, color: Color(0xFF3EB489)), label: '보관함'),
-          NavigationDestination(
-            icon: Badge(isLabelVisible: restockCount > 0, label: Text('$restockCount'), backgroundColor: const Color(0xFF3EB489), child: const Icon(Icons.alarm_on_outlined)),
-            selectedIcon: Badge(isLabelVisible: restockCount > 0, label: Text('$restockCount'), backgroundColor: const Color(0xFF3EB489), child: const Icon(Icons.alarm_on, color: Color(0xFF3EB489))),
-            label: '제작 필요',
-          ),
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.calendar_month_outlined), selectedIcon: Icon(Icons.calendar_month, color: Color(0xFF3EB489)), label: '캘린더'),
+          NavigationDestination(icon: Icon(Icons.edit_note_outlined), selectedIcon: Icon(Icons.edit_note, color: Color(0xFF3EB489)), label: '식단 기록'),
+          NavigationDestination(icon: Icon(Icons.kitchen_outlined), selectedIcon: Icon(Icons.kitchen, color: Color(0xFF3EB489)), label: '보관함'),
+          NavigationDestination(icon: Icon(Icons.alarm_on_outlined), selectedIcon: Icon(Icons.alarm_on, color: Color(0xFF3EB489)), label: '제작 필요'),
         ],
       ),
     );
@@ -1002,19 +1002,19 @@ class _MealLogTabState extends State<MealLogTab> {
 }
 
 // ==========================================
-// 2. 캘린더 화면
+// 2. 캘린더 화면 (식단 수정 시 토핑 큐브 직접 추가/제거 가능)
 // ==========================================
 class MealCalendarTab extends StatefulWidget {
   final List<MealLog> mealLogs;
   final List<CubeItem> cubes;
   final DateTime? birthDate;
   final DateTime? weaningStartDate;
-  final Function(MealLog, MealType, DateTime, String, int) onEditMeal;
+  final Function(MealLog, MealType, DateTime, String, int, Map<String, int>, List<String>) onEditMealFull;
   final Function(MealLog) onDeleteMeal;
   final Function(MealLog) onCompleteMeal;
   final Function(MealLog, String) onUpdateReaction;
 
-  const MealCalendarTab({super.key, required this.mealLogs, required this.cubes, required this.birthDate, required this.weaningStartDate, required this.onEditMeal, required this.onDeleteMeal, required this.onCompleteMeal, required this.onUpdateReaction});
+  const MealCalendarTab({super.key, required this.mealLogs, required this.cubes, required this.birthDate, required this.weaningStartDate, required this.onEditMealFull, required this.onDeleteMeal, required this.onCompleteMeal, required this.onUpdateReaction});
 
   @override
   State<MealCalendarTab> createState() => _MealCalendarTabState();
@@ -1064,82 +1064,133 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
     return news;
   }
 
+  // 식단 수정 팝업: 토핑 큐브 증감 및 직접 추가/제거 지원
   void _showEditMealDialog(MealLog log) {
     MealType currentType = log.mealType;
     TimeOfDay currentTime = TimeOfDay(hour: log.time.hour, minute: log.time.minute);
     final reactionController = TextEditingController(text: log.reaction);
-    final gramsController = TextEditingController(text: '${log.totalGrams}');
+    final Map<String, int> editUsage = Map<String, int>.from(log.cubeUsage);
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setDState) => AlertDialog(
-          title: const Text('식단 기록 수정', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('식재료: ${log.ingredients.join(" + ")}', style: TextStyle(fontSize: 12, color: Colors.grey.shade700, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 12),
-                const Text('끼니 차수', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 6),
-                Row(
-                  children: MealType.values.map((m) {
-                    final isSel = currentType == m;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: InkWell(
-                        onTap: () => setDState(() => currentType = m),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: isSel ? m.primaryColor : m.bgColor,
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: isSel ? m.primaryColor : m.primaryColor.withOpacity(0.4)),
-                          ),
-                          child: Text(m.label, style: TextStyle(color: isSel ? Colors.white : m.primaryColor, fontWeight: FontWeight.bold, fontSize: 12)),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        builder: (context, setDState) {
+          int computedGrams = 0;
+          editUsage.forEach((cubeId, count) {
+            final c = widget.cubes.firstWhere((item) => item.id == cubeId, orElse: () => CubeItem(id: '', name: '', category: FoodCategory.etc, unitWeight: 10, quantity: 0, madeDate: DateTime.now(), expireDate: DateTime.now()));
+            computedGrams += count * c.unitWeight;
+          });
+
+          return AlertDialog(
+            title: const Text('식단 수정', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('시간: ${currentTime.hour.toString().padLeft(2, '0')}:${currentTime.minute.toString().padLeft(2, '0')}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    TextButton.icon(
-                      icon: const Icon(Icons.schedule, size: 14),
-                      label: const Text('시간 변경', style: TextStyle(fontSize: 12)),
-                      onPressed: () async {
-                        final picked = await showTimePicker(context: context, initialTime: currentTime);
-                        if (picked != null) setDState(() => currentTime = picked);
-                      },
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('토핑 큐브 조정', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                        Text('총 $computedGrams g', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF3EB489))),
+                      ],
                     ),
+                    const SizedBox(height: 8),
+                    // 현재 보관함 큐브 목록을 띄워 바로 추가/감소 가능
+                    ...widget.cubes.map((c) {
+                      final count = editUsage[c.id] ?? 0;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Row(
+                          children: [
+                            Text(getFoodEmoji(c.name)),
+                            const SizedBox(width: 6),
+                            Expanded(child: Text('${c.name} (${c.unitWeight}g)', style: TextStyle(fontSize: 12, fontWeight: count > 0 ? FontWeight.bold : FontWeight.normal))),
+                            IconButton(
+                              icon: const Icon(Icons.remove_circle_outline, size: 18),
+                              onPressed: count > 0
+                                  ? () => setDState(() {
+                                        if (count == 1) editUsage.remove(c.id); else editUsage[c.id] = count - 1;
+                                      })
+                                  : null,
+                            ),
+                            Text('$count', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                            IconButton(
+                              icon: const Icon(Icons.add_circle_outline, size: 18),
+                              onPressed: () => setDState(() => editUsage[c.id] = count + 1),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                    const Divider(height: 18),
+                    const Text('끼니 차수', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: MealType.values.map((m) {
+                        final isSel = currentType == m;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: InkWell(
+                            onTap: () => setDState(() => currentType = m),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: isSel ? m.primaryColor : m.bgColor,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: isSel ? m.primaryColor : m.primaryColor.withOpacity(0.4)),
+                              ),
+                              child: Text(m.label, style: TextStyle(color: isSel ? Colors.white : m.primaryColor, fontWeight: FontWeight.bold, fontSize: 12)),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('시간: ${currentTime.hour.toString().padLeft(2, '0')}:${currentTime.minute.toString().padLeft(2, '0')}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        TextButton.icon(
+                          icon: const Icon(Icons.schedule, size: 14),
+                          label: const Text('시간 변경', style: TextStyle(fontSize: 12)),
+                          onPressed: () async {
+                            final picked = await showTimePicker(context: context, initialTime: currentTime);
+                            if (picked != null) setDState(() => currentTime = picked);
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(controller: reactionController, decoration: const InputDecoration(labelText: '메모 / 아기 반응')),
                   ],
                 ),
-                const SizedBox(height: 6),
-                TextField(controller: gramsController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '총 섭취량 (g)')),
-                const SizedBox(height: 8),
-                TextField(controller: reactionController, decoration: const InputDecoration(labelText: '메모 / 아기 반응')),
-              ],
+              ),
             ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF3EB489), foregroundColor: Colors.white),
-              onPressed: () {
-                final newDt = DateTime(log.time.year, log.time.month, log.time.day, currentTime.hour, currentTime.minute);
-                final g = int.tryParse(gramsController.text) ?? log.totalGrams;
-                widget.onEditMeal(log, currentType, newDt, reactionController.text.trim(), g);
-                Navigator.pop(ctx);
-              },
-              child: const Text('수정 완료'),
-            ),
-          ],
-        ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF3EB489), foregroundColor: Colors.white),
+                onPressed: () {
+                  final newDt = DateTime(log.time.year, log.time.month, log.time.day, currentTime.hour, currentTime.minute);
+                  List<String> newIngs = [];
+                  editUsage.forEach((id, cnt) {
+                    if (cnt > 0) {
+                      final c = widget.cubes.firstWhere((item) => item.id == id, orElse: () => CubeItem(id: '', name: '', category: FoodCategory.etc, unitWeight: 10, quantity: 0, madeDate: DateTime.now(), expireDate: DateTime.now()));
+                      newIngs.add('${c.name} ${c.unitWeight * cnt}g ($cnt개)');
+                    }
+                  });
+
+                  widget.onEditMealFull(log, currentType, newDt, reactionController.text.trim(), computedGrams, editUsage, newIngs);
+                  Navigator.pop(ctx);
+                },
+                child: const Text('수정 완료'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1851,7 +1902,7 @@ class _CubeStockTabState extends State<CubeStockTab> {
 }
 
 // ==========================================
-// 4. 제작 필요 화면 (실제 계획 스케줄 완벽 추적 알고리즘)
+// 4. 제작 필요 화면 (실제 계획 소진 시점 스마트 반영)
 // ==========================================
 enum RestockFilter { all, owned, unowned }
 
@@ -1946,7 +1997,7 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    // 미래/당일 식단 로그 정렬
+    // 미래/당일 식단 로그
     final futureLogs = widget.mealLogs.where((l) {
       final logDay = DateTime(l.time.year, l.time.month, l.time.day);
       return logDay.isAfter(today) || logDay.isAtSameMomentAs(today);
@@ -1955,7 +2006,7 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
     List<_PlanDisplayItem> items = [];
 
     for (var cube in widget.cubes) {
-      // 해당 큐브가 쓰이는 미래 식단 목록 (ID 또는 재료명 일치 여부 확인)
+      // 해당 큐브가 쓰이는 미래 식단 목록 (ID 또는 재료명으로 안전하게 탐색)
       List<MealLog> matchedLogs = [];
       for (var l in futureLogs) {
         final usesById = l.cubeUsage.containsKey(cube.id);
@@ -1965,7 +2016,7 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
         }
       }
 
-      // 1. 미보유 신규 큐브 (처음 시도하는 식재료)
+      // 1. 미보유 신규 큐브 (식단에 배정되어 있으므로 무조건 제작 필요)
       if (cube.isPlannedOnly) {
         final targetDate = matchedLogs.isNotEmpty ? matchedLogs.first.time : null;
         final dl = targetDate != null ? '${targetDate.month}월 ${targetDate.day}일' : '식단 전';
@@ -1986,9 +2037,7 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
       // 2. 현재 재고 0개
       if (curQty == 0) {
         final nextUse = matchedLogs.isNotEmpty ? matchedLogs.first.time : null;
-        final dl = nextUse != null
-            ? '${nextUse.month}월 ${nextUse.day}일'
-            : '식단 예정 없음 (소진 후 보충)';
+        final dl = nextUse != null ? '${nextUse.month}월 ${nextUse.day}일' : '즉시 제작 권장';
         items.add(_PlanDisplayItem(
           cube: cube,
           urgency: '현재 재고 0개',
@@ -2003,9 +2052,7 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
       // 3. 소비기한 만료
       if (isExpired) {
         final nextUse = matchedLogs.isNotEmpty ? matchedLogs.first.time : null;
-        final dl = nextUse != null
-            ? '${nextUse.month}월 ${nextUse.day}일 (다음 식단 전)'
-            : '폐기 후 신규 제작';
+        final dl = nextUse != null ? '${nextUse.month}월 ${nextUse.day}일 (식단 전)' : '폐기 후 신규 제작';
         items.add(_PlanDisplayItem(
           cube: cube,
           urgency: '소비기한 만료',
@@ -2017,10 +2064,11 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
         continue;
       }
 
-      // 4. 현재 재고 1~3개인 경우: '실제 다음 식단 예정일' 스마트 판정
+      // 4. 재고 1~3개인 보유 큐브:
+      // ★ 실제 향후 식단 계획에서 기존 재고가 바닥나는 시점(outOfStockDate)이 생길 때만 리스트에 올림!
       if (curQty <= 3) {
         int simulatedQty = curQty;
-        DateTime? outOfStockDate; // 기존 재고가 다 떨어져 새로 만든 큐브가 꼭 필요한 날
+        DateTime? outOfStockDate;
 
         for (var l in matchedLogs) {
           int count = l.cubeUsage[cube.id] ?? 1;
@@ -2031,36 +2079,21 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
           }
         }
 
-        String dl;
-        int score;
-
+        // 기존 재고로 예정된 식단을 다 커버하고도 남거나, 향후 식단 계획이 아예 없다면 굳이 목록에 띄우지 않음!
         if (outOfStockDate != null) {
-          // 1) 기존 재고가 바닥나서 새 큐브가 필요한 식단 날짜가 있는 경우 (예: 11월 28일)
-          dl = '${outOfStockDate.month}월 ${outOfStockDate.day}일';
-          score = outOfStockDate.difference(today).inDays;
-        } else if (matchedLogs.isNotEmpty) {
-          // 2) 앞으로 먹을 계획은 있으나 기존 1~3개로 그 식단들을 다 커버할 수 있는 경우
-          final lastPlanned = matchedLogs.last.time;
-          dl = '${lastPlanned.month}월 ${lastPlanned.day}일 (식단 소진 후)';
-          score = lastPlanned.difference(today).inDays + 10;
-        } else {
-          // 3) 향후 식단 계획에 아예 포함되어 있지 않은 경우 (미리 만들 필요 없음)
-          dl = '식단 예정 없음 (소진 후 보충)';
-          score = 800; // 정렬 순위를 뒤쪽으로 보냄
+          items.add(_PlanDisplayItem(
+            cube: cube,
+            urgency: '소진 임박',
+            deadline: '${outOfStockDate.month}월 ${outOfStockDate.day}일',
+            color: const Color(0xFFE53935),
+            score: outOfStockDate.difference(today).inDays,
+            isUnowned: false,
+          ));
         }
-
-        items.add(_PlanDisplayItem(
-          cube: cube,
-          urgency: '소진 임박',
-          deadline: dl,
-          color: const Color(0xFFE53935),
-          score: score,
-          isUnowned: false,
-        ));
       }
     }
 
-    // 제작 마감일이 당장 가까운 순(score 오름차순)으로 자동 정렬
+    // 마감일이 당장 가까운 순으로 자동 정렬
     items.sort((a, b) => a.score.compareTo(b.score));
 
     final filteredItems = items.where((i) {
