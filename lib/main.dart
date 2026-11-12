@@ -79,7 +79,41 @@ String getFoodEmoji(String name) {
   if (n.contains('바나나')) return '🍌';
   if (n.contains('계란') || n.contains('노른자')) return '🥚';
   if (n.contains('두부') || n.contains('완두콩')) return '🫘';
+  if (n.contains('청경채') || n.contains('양배추') || n.contains('배추')) return '🥬';
   return '🥄';
+}
+
+/// 먹어본 식재료 마스터 히스토리 모델 (폐기/소진 후에도 보존)
+class TriedIngredient {
+  String name;
+  FoodCategory category;
+  int lastUnitWeight;
+  String lastReactionNote;
+  bool hasAlertReaction;
+
+  TriedIngredient({
+    required this.name,
+    required this.category,
+    required this.lastUnitWeight,
+    this.lastReactionNote = '특이사항 없음',
+    this.hasAlertReaction = false,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'category': category.label,
+        'lastUnitWeight': lastUnitWeight,
+        'lastReactionNote': lastReactionNote,
+        'hasAlertReaction': hasAlertReaction,
+      };
+
+  factory TriedIngredient.fromJson(Map<String, dynamic> j) => TriedIngredient(
+        name: j['name'],
+        category: FoodCategory.fromLabel(j['category']),
+        lastUnitWeight: j['lastUnitWeight'] ?? 10,
+        lastReactionNote: j['lastReactionNote'] ?? '특이사항 없음',
+        hasAlertReaction: j['hasAlertReaction'] ?? false,
+      );
 }
 
 class CubeItem {
@@ -218,6 +252,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   List<CubeItem> _cubes = [];
   List<MealLog> _mealLogs = [];
+  List<TriedIngredient> _triedIngredients = []; // 먹어본 식재료 이력 보관소
   DateTime? _birthDate;
   DateTime? _weaningStartDate;
 
@@ -231,6 +266,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     final prefs = await SharedPreferences.getInstance();
     final cs = prefs.getString('cubes_data');
     final ms = prefs.getString('meals_data');
+    final ts = prefs.getString('tried_ingredients_data');
     final bs = prefs.getString('baby_birth_date');
     final ws = prefs.getString('weaning_start_date');
 
@@ -264,16 +300,71 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       _mealLogs = (jsonDecode(ms) as List).map((i) => MealLog.fromJson(i)).toList();
     }
 
+    if (ts != null) {
+      _triedIngredients = (jsonDecode(ts) as List).map((i) => TriedIngredient.fromJson(i)).toList();
+    }
+
+    // 기존 큐브 및 식단 로그를 스캔해 먹어본 식재료 마스터 자동 동기화
+    _syncTriedIngredients();
+
     _birthDate = bs != null ? DateTime.parse(bs) : DateTime.now().subtract(const Duration(days: 180));
     _weaningStartDate = ws != null ? DateTime.parse(ws) : DateTime.now().subtract(const Duration(days: 20));
 
     setState(() => _isLoading = false);
   }
 
+  bool _isAlertReaction(String text) {
+    return text.contains('붉어짐') || text.contains('두드러기') || text.contains('발진') || text.contains('가려움') || text.contains('설사') || text.contains('뱉어냄');
+  }
+
+  void _recordTriedIngredient(String name, FoodCategory category, int unitWeight, {String? reaction}) {
+    final cleanName = name.trim();
+    if (cleanName.isEmpty) return;
+
+    final idx = _triedIngredients.indexWhere((t) => t.name == cleanName);
+    final hasAlert = reaction != null && _isAlertReaction(reaction);
+
+    if (idx != -1) {
+      _triedIngredients[idx].category = category;
+      _triedIngredients[idx].lastUnitWeight = unitWeight;
+      if (reaction != null && reaction.isNotEmpty && !reaction.contains('계획') && !reaction.contains('예정')) {
+        _triedIngredients[idx].lastReactionNote = reaction;
+        if (hasAlert) _triedIngredients[idx].hasAlertReaction = true;
+      }
+    } else {
+      _triedIngredients.add(TriedIngredient(
+        name: cleanName,
+        category: category,
+        lastUnitWeight: unitWeight,
+        lastReactionNote: (reaction != null && reaction.isNotEmpty && !reaction.contains('계획')) ? reaction : '특이사항 없음',
+        hasAlertReaction: hasAlert,
+      ));
+    }
+  }
+
+  void _syncTriedIngredients() {
+    for (var c in _cubes) {
+      if (!c.isPlannedOnly) {
+        _recordTriedIngredient(c.name, c.category, c.unitWeight);
+      }
+    }
+    for (var m in _mealLogs) {
+      if (!m.isPlanned) {
+        m.cubeUsage.forEach((cubeId, count) {
+          final cIdx = _cubes.indexWhere((c) => c.id == cubeId);
+          if (cIdx != -1) {
+            _recordTriedIngredient(_cubes[cIdx].name, _cubes[cIdx].category, _cubes[cIdx].unitWeight, reaction: m.reaction);
+          }
+        });
+      }
+    }
+  }
+
   Future<void> _saveData() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('cubes_data', jsonEncode(_cubes.map((c) => c.toJson()).toList()));
     await prefs.setString('meals_data', jsonEncode(_mealLogs.map((m) => m.toJson()).toList()));
+    await prefs.setString('tried_ingredients_data', jsonEncode(_triedIngredients.map((t) => t.toJson()).toList()));
     if (_birthDate != null) await prefs.setString('baby_birth_date', _birthDate!.toIso8601String());
     if (_weaningStartDate != null) await prefs.setString('weaning_start_date', _weaningStartDate!.toIso8601String());
   }
@@ -346,6 +437,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     required Map<CubeItem, int> selectedCubes,
     required String reaction,
   }) {
+    List<String> shortageWarnings = [];
+
     setState(() {
       final now = DateTime.now();
       final todayMidnight = DateTime(now.year, now.month, now.day);
@@ -359,6 +452,17 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           totalWeight += w;
           ingSummaries.add('${cube.name} ${w}g (${count}개)');
           cubeUsageMap[cube.id] = count;
+
+          // 먹어본 식재료 이력 업데이트
+          _recordTriedIngredient(cube.name, cube.category, cube.unitWeight, reaction: reaction);
+
+          // 재고 부족 여부 확인 (단일 당일 식사가 아닌 계획일 때)
+          final totalNeeded = count * repeatDays;
+          final isFuture = DateTime(startDate.year, startDate.month, startDate.day).isAfter(todayMidnight);
+          if ((isFuture || repeatDays > 1) && cube.quantity < totalNeeded) {
+            final lack = totalNeeded - cube.quantity;
+            shortageWarnings.add('${cube.name} (${lack}개 부족)');
+          }
         }
       });
 
@@ -395,16 +499,29 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     });
     _saveData();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('[${mealType.label}] 식단이 성공적으로 저장되었습니다.'), backgroundColor: const Color(0xFF3EB489)),
-    );
+    if (shortageWarnings.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('저장 완료! 부족 재료(${shortageWarnings.join(", ")})가 [제작 필요] 탭에 자동 연동되었습니다.'),
+          backgroundColor: const Color(0xFFE53935),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('[${mealType.label}] 식단이 성공적으로 저장되었습니다.'), backgroundColor: const Color(0xFF3EB489)),
+      );
+    }
   }
 
   void _completePlannedMeal(MealLog log) {
     setState(() {
       log.cubeUsage.forEach((cubeId, count) {
         final idx = _cubes.indexWhere((c) => c.id == cubeId);
-        if (idx != -1) _cubes[idx].quantity = (_cubes[idx].quantity - count).clamp(0, 999);
+        if (idx != -1) {
+          _cubes[idx].quantity = (_cubes[idx].quantity - count).clamp(0, 999);
+          _recordTriedIngredient(_cubes[idx].name, _cubes[idx].category, _cubes[idx].unitWeight, reaction: log.reaction);
+        }
       });
       log.isPlanned = false;
       if (log.reaction.startsWith('[예정]') || log.reaction.contains('계획')) log.reaction = '완식 (식사 완료)';
@@ -441,6 +558,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           MealCalendarTab(
             mealLogs: _mealLogs,
             cubes: _cubes,
+            triedIngredients: _triedIngredients,
             birthDate: _birthDate,
             weaningStartDate: _weaningStartDate,
             onEditMealFull: (l, t, tm, r, g, usages, ings) {
@@ -468,18 +586,32 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             },
             onCompleteMeal: _completePlannedMeal,
             onUpdateReaction: (l, r) {
-              setState(() => l.reaction = r);
+              setState(() {
+                l.reaction = r;
+                l.cubeUsage.forEach((cubeId, count) {
+                  final cIdx = _cubes.indexWhere((c) => c.id == cubeId);
+                  if (cIdx != -1) {
+                    _recordTriedIngredient(_cubes[cIdx].name, _cubes[cIdx].category, _cubes[cIdx].unitWeight, reaction: r);
+                  }
+                });
+              });
               _saveData();
             },
           ),
           // 1번: 식단 기록
           MealLogTab(
             cubes: _cubes,
+            triedIngredients: _triedIngredients,
             birthDate: _birthDate,
             weaningStartDate: _weaningStartDate,
             onSaveMeal: _addMealRecord,
-            onAddPlannedCube: (c) {
-              setState(() => _cubes.insert(0, c));
+            onAddCubeToStock: (c) {
+              setState(() {
+                _cubes.insert(0, c);
+                if (!c.isPlannedOnly) {
+                  _recordTriedIngredient(c.name, c.category, c.unitWeight);
+                }
+              });
               _saveData();
             },
           ),
@@ -492,7 +624,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               _saveData();
             },
             onAddCube: (c) {
-              setState(() => _cubes.insert(0, c));
+              setState(() {
+                _cubes.insert(0, c);
+                _recordTriedIngredient(c.name, c.category, c.unitWeight);
+              });
               _saveData();
             },
             onEditCube: (c, n, cat, w, q, md, sl) {
@@ -504,11 +639,18 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 c.madeDate = md;
                 c.expireDate = md.add(Duration(days: sl));
                 c.isPlannedOnly = false;
+                _recordTriedIngredient(n, cat, w);
               });
               _saveData();
             },
             onDeleteCube: (c) {
-              setState(() => _cubes.removeWhere((item) => item.id == c.id));
+              setState(() {
+                // 삭제/폐기하기 전에 먹어본 식재료 히스토리에 안전하게 백업
+                if (!c.isPlannedOnly) {
+                  _recordTriedIngredient(c.name, c.category, c.unitWeight);
+                }
+                _cubes.removeWhere((item) => item.id == c.id);
+              });
               _saveData();
             },
           ),
@@ -523,6 +665,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 c.madeDate = md;
                 c.expireDate = md.add(Duration(days: sl));
                 c.isPlannedOnly = false;
+                _recordTriedIngredient(c.name, c.category, w);
               });
               _saveData();
             },
@@ -566,10 +709,11 @@ String calculateDdayString(DateTime targetDate, DateTime? birthDate, DateTime? w
 }
 
 // ==========================================
-// 1. 식단 기록 화면
+// 1. 식단 기록 화면 ('먹어본 재료 다시 담기' 추가)
 // ==========================================
 class MealLogTab extends StatefulWidget {
   final List<CubeItem> cubes;
+  final List<TriedIngredient> triedIngredients;
   final DateTime? birthDate;
   final DateTime? weaningStartDate;
   final Function({
@@ -579,9 +723,9 @@ class MealLogTab extends StatefulWidget {
     required Map<CubeItem, int> selectedCubes,
     required String reaction,
   }) onSaveMeal;
-  final Function(CubeItem) onAddPlannedCube;
+  final Function(CubeItem) onAddCubeToStock;
 
-  const MealLogTab({super.key, required this.cubes, required this.birthDate, required this.weaningStartDate, required this.onSaveMeal, required this.onAddPlannedCube});
+  const MealLogTab({super.key, required this.cubes, required this.triedIngredients, required this.birthDate, required this.weaningStartDate, required this.onSaveMeal, required this.onAddCubeToStock});
 
   @override
   State<MealLogTab> createState() => _MealLogTabState();
@@ -602,6 +746,102 @@ class _MealLogTabState extends State<MealLogTab> {
 
   int get _repeatDays => DateTime(_endDate.year, _endDate.month, _endDate.day).difference(DateTime(_startDate.year, _startDate.month, _startDate.day)).inDays + 1;
   bool get _isFutureDate => DateTime(_startDate.year, _startDate.month, _startDate.day).isAfter(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day));
+
+  // 먹어본 식재료 이력에서 다시 식단에 담기 모달
+  void _showTriedHistoryDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        final sortedTried = List<TriedIngredient>.from(widget.triedIngredients)
+          ..sort((a, b) => a.category.sortOrder.compareTo(b.category.sortOrder));
+
+        return AlertDialog(
+          title: const Text('먹어본 재료 다시 담기', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: sortedTried.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 20),
+                    child: Text('아직 먹어본 식재료 이력이 없습니다.', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                  )
+                : ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: sortedTried.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, idx) {
+                      final item = sortedTried[idx];
+                      final existingCubeIdx = widget.cubes.indexWhere((c) => c.name == item.name);
+                      final hasStock = existingCubeIdx != -1 && widget.cubes[existingCubeIdx].quantity > 0;
+
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        leading: Text(getFoodEmoji(item.name), style: const TextStyle(fontSize: 22)),
+                        title: Row(
+                          children: [
+                            Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                              decoration: BoxDecoration(color: item.category.bgColor, borderRadius: BorderRadius.circular(4)),
+                              child: Text(item.category.label, style: TextStyle(fontSize: 10, color: item.category.textColor, fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '기존 용량 ${item.lastUnitWeight}g · ${hasStock ? "현재 보유중 (${widget.cubes[existingCubeIdx].quantity}개)" : "현재 재고 없음 (재제작 필요)"}',
+                              style: TextStyle(fontSize: 11, color: hasStock ? const Color(0xFF3EB489) : const Color(0xFFE53935), fontWeight: FontWeight.w600),
+                            ),
+                            Text(
+                              item.hasAlertReaction ? '⚠️ 주의 이력: ${item.lastReactionNote}' : '✅ 과거 반응: ${item.lastReactionNote}',
+                              style: TextStyle(fontSize: 11, color: item.hasAlertReaction ? Colors.red.shade700 : Colors.grey.shade600),
+                            ),
+                          ],
+                        ),
+                        trailing: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF3EB489),
+                            foregroundColor: Colors.white,
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                          ),
+                          onPressed: () {
+                            if (existingCubeIdx != -1) {
+                              // 보관함에 이미 카드가 있으면 수량 1 추가 담기
+                              final c = widget.cubes[existingCubeIdx];
+                              setState(() => _selectedQuantities[c.id] = (_selectedQuantities[c.id] ?? 0) + 1);
+                            } else {
+                              // 폐기되어 보관함에 없으면 재고 0개(재제작 필요) 실물 카드로 복구 후 담기
+                              final restoredCube = CubeItem(
+                                id: DateTime.now().millisecondsSinceEpoch.toString(),
+                                name: item.name,
+                                category: item.category,
+                                unitWeight: item.lastUnitWeight,
+                                quantity: 0,
+                                madeDate: DateTime.now(),
+                                expireDate: DateTime.now().add(const Duration(days: 14)),
+                                isPlannedOnly: false, // 이미 테스트 마친 안전 재료이므로 '신규'가 아닌 '재고 0개(재제작)' 처리
+                              );
+                              widget.onAddCubeToStock(restoredCube);
+                              setState(() => _selectedQuantities[restoredCube.id] = 1);
+                            }
+                            Navigator.pop(ctx);
+                          },
+                          child: const Text('담기', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('닫기')),
+          ],
+        );
+      },
+    );
+  }
 
   void _showAddUnregisteredDialog() {
     final nameCtrl = TextEditingController();
@@ -635,6 +875,9 @@ class _MealLogTabState extends State<MealLogTab> {
               onPressed: () {
                 final n = nameCtrl.text.trim();
                 if (n.isEmpty) return;
+                // 이미 먹어본 이력이 있는 재료인지 확인
+                final alreadyTried = widget.triedIngredients.any((t) => t.name == n);
+
                 final newCube = CubeItem(
                   id: DateTime.now().millisecondsSinceEpoch.toString(),
                   name: n,
@@ -643,9 +886,9 @@ class _MealLogTabState extends State<MealLogTab> {
                   quantity: 0,
                   madeDate: DateTime.now(),
                   expireDate: DateTime.now().add(const Duration(days: 14)),
-                  isPlannedOnly: true,
+                  isPlannedOnly: !alreadyTried, // 처음이면 미보유(신규), 이미 먹어본 재료면 재고 0개(재제작)
                 );
-                widget.onAddPlannedCube(newCube);
+                widget.onAddCubeToStock(newCube);
                 setState(() => _selectedQuantities[newCube.id] = 1);
                 Navigator.pop(ctx);
               },
@@ -872,6 +1115,13 @@ class _MealLogTabState extends State<MealLogTab> {
                                               decoration: BoxDecoration(color: const Color(0xFFF3E5F5), borderRadius: BorderRadius.circular(4), border: Border.all(color: const Color(0xFFCE93D8))),
                                               child: const Text('신규 제작필요', style: TextStyle(fontSize: 10, color: Color(0xFF9C27B0), fontWeight: FontWeight.bold)),
                                             ),
+                                          ] else if (cube.quantity == 0) ...[
+                                            const SizedBox(width: 6),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                                              decoration: BoxDecoration(color: const Color(0xFFFFEBEE), borderRadius: BorderRadius.circular(4), border: Border.all(color: const Color(0xFFEF9A9A))),
+                                              child: const Text('재제작 필요', style: TextStyle(fontSize: 10, color: Color(0xFFE53935), fontWeight: FontWeight.bold)),
+                                            ),
                                           ],
                                         ],
                                       ),
@@ -889,17 +1139,35 @@ class _MealLogTabState extends State<MealLogTab> {
                         }).toList(),
                       ),
                 const Divider(height: 18),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: _showAddUnregisteredDialog,
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF6A1B9A),
-                      side: const BorderSide(color: Color(0xFFCE93D8)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                // 하단 버튼 2개 나란히 배치: [먹어본 재료 다시 담기] / [미등록 재료 추가]
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _showTriedHistoryDialog,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF234E42),
+                          side: const BorderSide(color: Color(0xFF3EB489)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                        child: const Text('먹어본 재료 다시 담기', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      ),
                     ),
-                    child: const Text('미등록 재료 추가', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _showAddUnregisteredDialog,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF6A1B9A),
+                          side: const BorderSide(color: Color(0xFFCE93D8)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                        child: const Text('미등록 재료 추가', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -1002,11 +1270,12 @@ class _MealLogTabState extends State<MealLogTab> {
 }
 
 // ==========================================
-// 2. 캘린더 화면 (식단 수정 시 토핑 큐브 직접 추가/제거 가능)
+// 2. 캘린더 화면 (먹어본 안전 재료는 NEW 첫 시도 경고 제외)
 // ==========================================
 class MealCalendarTab extends StatefulWidget {
   final List<MealLog> mealLogs;
   final List<CubeItem> cubes;
+  final List<TriedIngredient> triedIngredients;
   final DateTime? birthDate;
   final DateTime? weaningStartDate;
   final Function(MealLog, MealType, DateTime, String, int, Map<String, int>, List<String>) onEditMealFull;
@@ -1014,7 +1283,7 @@ class MealCalendarTab extends StatefulWidget {
   final Function(MealLog) onCompleteMeal;
   final Function(MealLog, String) onUpdateReaction;
 
-  const MealCalendarTab({super.key, required this.mealLogs, required this.cubes, required this.birthDate, required this.weaningStartDate, required this.onEditMealFull, required this.onDeleteMeal, required this.onCompleteMeal, required this.onUpdateReaction});
+  const MealCalendarTab({super.key, required this.mealLogs, required this.cubes, required this.triedIngredients, required this.birthDate, required this.weaningStartDate, required this.onEditMealFull, required this.onDeleteMeal, required this.onCompleteMeal, required this.onUpdateReaction});
 
   @override
   State<MealCalendarTab> createState() => _MealCalendarTabState();
@@ -1048,23 +1317,30 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
     return list;
   }
 
+  // 이미 먹어본 이력이 있는 재료는 'NEW 첫 시도'에서 제외
   List<String> _getNewIngredients(MealLog log) {
     List<String> news = [];
     final curDay = DateTime(log.time.year, log.time.month, log.time.day);
     final past = widget.mealLogs.where((l) => DateTime(l.time.year, l.time.month, l.time.day).isBefore(curDay)).toList();
-    Set<String> pastIds = {};
-    for (var pl in past) { pastIds.addAll(pl.cubeUsage.keys); }
+    Set<String> pastNames = {};
+    for (var pl in past) {
+      for (var ing in pl.ingredients) {
+        pastNames.add(ing.split(' ').first);
+      }
+    }
 
     log.cubeUsage.forEach((id, count) {
-      if (!pastIds.contains(id)) {
-        final match = widget.cubes.firstWhere((c) => c.id == id, orElse: () => CubeItem(id: '', name: '', category: FoodCategory.etc, unitWeight: 0, quantity: 0, madeDate: DateTime.now(), expireDate: DateTime.now()));
-        if (match.name.isNotEmpty) news.add(match.name);
+      final match = widget.cubes.firstWhere((c) => c.id == id, orElse: () => CubeItem(id: '', name: '', category: FoodCategory.etc, unitWeight: 0, quantity: 0, madeDate: DateTime.now(), expireDate: DateTime.now()));
+      if (match.name.isNotEmpty) {
+        final alreadyTriedInHistory = widget.triedIngredients.any((t) => t.name == match.name);
+        if (!pastNames.contains(match.name) && (!alreadyTriedInHistory || match.isPlannedOnly)) {
+          news.add(match.name);
+        }
       }
     });
     return news;
   }
 
-  // 식단 수정 팝업: 토핑 큐브 증감 및 직접 추가/제거 지원
   void _showEditMealDialog(MealLog log) {
     MealType currentType = log.mealType;
     TimeOfDay currentTime = TimeOfDay(hour: log.time.hour, minute: log.time.minute);
@@ -1098,7 +1374,6 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    // 현재 보관함 큐브 목록을 띄워 바로 추가/감소 가능
                     ...widget.cubes.map((c) {
                       final count = editUsage[c.id] ?? 0;
                       return Padding(
@@ -1902,7 +2177,7 @@ class _CubeStockTabState extends State<CubeStockTab> {
 }
 
 // ==========================================
-// 4. 제작 필요 화면 (실제 계획 소진 시점 스마트 반영)
+// 4. 제작 필요 화면
 // ==========================================
 enum RestockFilter { all, owned, unowned }
 
@@ -1997,7 +2272,6 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    // 미래/당일 식단 로그
     final futureLogs = widget.mealLogs.where((l) {
       final logDay = DateTime(l.time.year, l.time.month, l.time.day);
       return logDay.isAfter(today) || logDay.isAtSameMomentAs(today);
@@ -2006,7 +2280,6 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
     List<_PlanDisplayItem> items = [];
 
     for (var cube in widget.cubes) {
-      // 해당 큐브가 쓰이는 미래 식단 목록 (ID 또는 재료명으로 안전하게 탐색)
       List<MealLog> matchedLogs = [];
       for (var l in futureLogs) {
         final usesById = l.cubeUsage.containsKey(cube.id);
@@ -2016,7 +2289,7 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
         }
       }
 
-      // 1. 미보유 신규 큐브 (식단에 배정되어 있으므로 무조건 제작 필요)
+      // 1. 미보유 신규 큐브
       if (cube.isPlannedOnly) {
         final targetDate = matchedLogs.isNotEmpty ? matchedLogs.first.time : null;
         final dl = targetDate != null ? '${targetDate.month}월 ${targetDate.day}일' : '식단 전';
@@ -2034,7 +2307,7 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
       final curQty = cube.quantity;
       final isExpired = cube.daysRemaining < 0;
 
-      // 2. 현재 재고 0개
+      // 2. 현재 재고 0개인 경우 (과거에 먹어본 재료 중 소진/폐기 후 재배정된 재료 포함)
       if (curQty == 0) {
         final nextUse = matchedLogs.isNotEmpty ? matchedLogs.first.time : null;
         final dl = nextUse != null ? '${nextUse.month}월 ${nextUse.day}일' : '즉시 제작 권장';
@@ -2065,7 +2338,7 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
       }
 
       // 4. 재고 1~3개인 보유 큐브:
-      // ★ 실제 향후 식단 계획에서 기존 재고가 바닥나는 시점(outOfStockDate)이 생길 때만 리스트에 올림!
+      // 향후 식단 계획에서 기존 재고가 바닥나서 새로 만들어야 하는 날(outOfStockDate)이 있을 때만 표시
       if (curQty <= 3) {
         int simulatedQty = curQty;
         DateTime? outOfStockDate;
@@ -2079,7 +2352,6 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
           }
         }
 
-        // 기존 재고로 예정된 식단을 다 커버하고도 남거나, 향후 식단 계획이 아예 없다면 굳이 목록에 띄우지 않음!
         if (outOfStockDate != null) {
           items.add(_PlanDisplayItem(
             cube: cube,
@@ -2093,7 +2365,6 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
       }
     }
 
-    // 마감일이 당장 가까운 순으로 자동 정렬
     items.sort((a, b) => a.score.compareTo(b.score));
 
     final filteredItems = items.where((i) {
