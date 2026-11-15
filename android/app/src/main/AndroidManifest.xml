@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="baby_food"
+        android:label="토핑 이유식"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
