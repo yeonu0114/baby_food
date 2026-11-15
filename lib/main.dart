@@ -68,7 +68,7 @@ class BabyFoodApp extends StatelessWidget {
       builder: (context, _) {
         final ctrl = AppThemeController.instance;
         return MaterialApp(
-          title: '토핑 이유식 매니저',
+          title: '또핑',
           debugShowCheckedModeBanner: false,
           theme: ThemeData(
             colorScheme: ColorScheme.fromSeed(
@@ -937,7 +937,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             children: [
               Text(AppThemeController.instance.gender.emoji, style: const TextStyle(fontSize: 20)),
               const SizedBox(width: 8),
-              Text('토핑 이유식 매니저', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: appTextColor)),
+              Text('또핑', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 19, color: appTextColor)),
+              const SizedBox(width: 6),
+              Text('토핑 이유식', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13, color: Colors.grey[600])),
             ],
           ),
           actions: [
