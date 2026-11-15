@@ -2158,6 +2158,7 @@ class MealCalendarTab extends StatefulWidget {
 class _MealCalendarTabState extends State<MealCalendarTab> {
   late DateTime _focusedDate;
   late DateTime _selectedDate;
+  bool _isRescueDismissed = false;
 
   final List<String> _skinTags = ['피부 정상', '입주변 붉어짐', '두드러기/발진', '눈 비빔/가려움'];
   final List<String> _stoolTags = ['황금변', '된변', '무른변', '설사', '대변 X'];
@@ -2415,6 +2416,7 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
 
   // 큐브 추가 제안 배너 (노란/앰버 계열 그라데이션 + 친근한 어투)
   Widget _buildRescueBanner(List<MealLog> logs) {
+    if (_isRescueDismissed) return const SizedBox.shrink();
     final expiring = widget.cubes.where((c) => !c.isPlannedOnly && c.quantity > 0 && c.daysRemaining >= 0 && c.daysRemaining <= 2).toList();
     if (expiring.isEmpty) return const SizedBox.shrink();
 
@@ -2484,6 +2486,14 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                       style: const TextStyle(fontSize: 11, color: Color(0xFF78350F), height: 1.35),
                     ),
                   ],
+                ),
+              ),
+              InkWell(
+                onTap: () => setState(() => _isRescueDismissed = true),
+                borderRadius: BorderRadius.circular(10),
+                child: const Padding(
+                  padding: EdgeInsets.only(left: 4, top: 2),
+                  child: Text('✕', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFB45309))),
                 ),
               ),
             ],
