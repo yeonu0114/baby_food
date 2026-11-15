@@ -1718,23 +1718,39 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
   List<String> _getNewIngredients(MealLog log) {
     List<String> news = [];
     final curDay = DateTime(log.time.year, log.time.month, log.time.day);
+
+    // 1) 이 날짜(curDay) 이전의 모든 식단에 등장했던 식재료 이름 수집
     final past = widget.mealLogs.where((l) => DateTime(l.time.year, l.time.month, l.time.day).isBefore(curDay)).toList();
     Set<String> pastNames = {};
     for (var pl in past) {
       for (var ing in pl.ingredients) {
-        pastNames.add(ing.split(' ').first);
+        final name = ing.split(' ').first.trim();
+        if (name.isNotEmpty) pastNames.add(name);
       }
     }
 
+    // 2) 현재 식단에 들어간 식재료 목록 수집 (ingredients 문자열 및 cubeUsage 양쪽 모두 확인)
+    Set<String> curMealIngredients = {};
+    for (var ing in log.ingredients) {
+      final name = ing.split(' ').first.trim();
+      if (name.isNotEmpty) curMealIngredients.add(name);
+    }
     log.cubeUsage.forEach((id, count) {
-      final match = widget.cubes.firstWhere((c) => c.id == id, orElse: () => CubeItem(id: '', name: '', category: FoodCategory.etc, unitWeight: 0, quantity: 0, madeDate: DateTime.now(), expireDate: DateTime.now()));
+      final match = widget.cubes.firstWhere(
+        (c) => c.id == id,
+        orElse: () => CubeItem(id: '', name: '', category: FoodCategory.etc, unitWeight: 0, quantity: 0, madeDate: DateTime.now(), expireDate: DateTime.now()),
+      );
       if (match.name.isNotEmpty) {
-        final alreadyTriedInHistory = widget.triedIngredients.any((t) => t.name == match.name);
-        if (!pastNames.contains(match.name) && (!alreadyTriedInHistory || match.isPlannedOnly)) {
-          news.add(match.name);
-        }
+        curMealIngredients.add(match.name);
       }
     });
+
+    // 3) 과거 식단에 한 번도 없었던 식재료라면, 큐브 제작 완료/보관함 이동 여부와 상관없이 무조건 '첫 시도'로 유지!
+    for (var name in curMealIngredients) {
+      if (!pastNames.contains(name) && !news.contains(name)) {
+        news.add(name);
+      }
+    }
     return news;
   }
 
@@ -1957,10 +1973,10 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                           side: BorderSide(
-                            color: l.isPlanned
-                                ? const Color(0xFF3EB489)
-                                : (news.isNotEmpty ? const Color(0xFFFFB74D) : Colors.grey.shade200),
-                            width: l.isPlanned ? 1.5 : 1.0,
+                            color: news.isNotEmpty
+                                ? const Color(0xFFFF9800)
+                                : (l.isPlanned ? appPrimaryColor : Colors.grey.shade200),
+                            width: (l.isPlanned || news.isNotEmpty) ? 1.5 : 1.0,
                           ),
                         ),
                         child: Padding(
