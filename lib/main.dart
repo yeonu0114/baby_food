@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-
 enum BabyGender {
   boy('남아', '👦', Color(0xFF4DABF7), Color(0xFFE7F5FF), Color(0xFFF8FAFC), Color(0xFF1864AB)),
   girl('여아', '👧', Color(0xFFFAA2C1), Color(0xFFFFF0F6), Color(0xFFFFF5F7), Color(0xFFA61E4D)),
@@ -76,7 +75,7 @@ class BabyFoodApp extends StatelessWidget {
               primary: ctrl.primaryColor,
               surface: Colors.white,
             ),
-            scaffoldBackgroundColor: ctrl.backgroundColor,
+            scaffoldBackgroundColor: const Color(0xFFF8FAFC),
             appBarTheme: AppBarTheme(
               backgroundColor: Colors.white,
               foregroundColor: ctrl.appbarTextColor,
@@ -258,7 +257,7 @@ class CubeItem {
     if (isPlannedOnly || quantity == 0) return const Color(0xFF9C27B0);
     final d = daysRemaining;
     if (d < 0) return const Color(0xFFE53935);
-    if (d <= 2) return const Color(0xFFE53935); // 붉은색 일관 강조
+    if (d <= 2) return const Color(0xFFE53935);
     return appPrimaryColor;
   }
 
@@ -266,7 +265,7 @@ class CubeItem {
     if (isPlannedOnly || quantity == 0) return const Color(0xFFF3E5F5);
     final d = daysRemaining;
     if (d < 0) return const Color(0xFFFFEBEE);
-    if (d <= 2) return const Color(0xFFFFEBEE); // 붉은색 일관 강조
+    if (d <= 2) return const Color(0xFFFFEBEE);
     return appLightAccentColor;
   }
 
@@ -381,27 +380,80 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       _cubes = [
         CubeItem(
           id: '1',
-          name: '오트밀쌀죽',
+          name: '쌀죽',
           category: FoodCategory.grain,
-          unitWeight: 30,
-          quantity: 6,
-          madeDate: now.subtract(const Duration(days: 2)),
-          expireDate: now.add(const Duration(days: 12)),
+          unitWeight: 50,
+          quantity: 4,
+          subOption: '10배죽',
+          madeDate: now.subtract(const Duration(days: 4)),
+          expireDate: now.add(const Duration(days: 10)),
         ),
         CubeItem(
           id: '2',
-          name: '소고기 안심',
+          name: '소고기',
           category: FoodCategory.meat,
           unitWeight: 10,
           quantity: 3,
-          madeDate: now.subtract(const Duration(days: 3)),
-          expireDate: now.add(const Duration(days: 11)),
+          subOption: '안심',
+          madeDate: now.subtract(const Duration(days: 6)),
+          expireDate: now.add(const Duration(days: 8)),
+        ),
+        CubeItem(
+          id: '3',
+          name: '청경채',
+          category: FoodCategory.vegetable,
+          unitWeight: 10,
+          quantity: 2,
+          madeDate: now.subtract(const Duration(days: 12)),
+          expireDate: now.add(const Duration(days: 2)), // D-2 임박 큐브!
+        ),
+        CubeItem(
+          id: '4',
+          name: '단호박',
+          category: FoodCategory.vegetable,
+          unitWeight: 10,
+          quantity: 5,
+          madeDate: now.subtract(const Duration(days: 7)),
+          expireDate: now.add(const Duration(days: 7)),
+        ),
+        CubeItem(
+          id: '5',
+          name: '사과',
+          category: FoodCategory.fruit,
+          unitWeight: 20,
+          quantity: 2,
+          madeDate: now.subtract(const Duration(days: 9)),
+          expireDate: now.add(const Duration(days: 5)),
         ),
       ];
     }
 
     if (ms != null) {
       _mealLogs = (jsonDecode(ms) as List).map((i) => MealLog.fromJson(i)).toList();
+    } else {
+      final now = DateTime.now();
+      _mealLogs = [
+        MealLog(
+          id: 'sample_meal_1',
+          mealType: MealType.first,
+          time: DateTime(now.year, now.month, now.day, 9, 30),
+          ingredients: ['쌀죽(10배죽) 50g', '소고기(안심) 10g', '단호박 10g'],
+          cubeUsage: {'1': 1, '2': 1, '4': 1},
+          totalGrams: 70,
+          reaction: '반응 관찰 준비 완료',
+          isPlanned: true,
+        ),
+        MealLog(
+          id: 'sample_meal_2',
+          mealType: MealType.second,
+          time: DateTime(now.year, now.month, now.day, 14, 0),
+          ingredients: ['오트밀포리지 30g', '사과 20g'],
+          cubeUsage: {'5': 1},
+          totalGrams: 50,
+          reaction: '완식',
+          isPlanned: false,
+        ),
+      ];
     }
 
     if (ts != null) {
@@ -410,8 +462,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
     _syncTriedIngredients();
 
-    _birthDate = bs != null ? DateTime.parse(bs) : DateTime.now().subtract(const Duration(days: 180));
-    _weaningStartDate = ws != null ? DateTime.parse(ws) : DateTime.now().subtract(const Duration(days: 20));
+    _birthDate = bs != null ? DateTime.parse(bs) : DateTime.now().subtract(const Duration(days: 182));
+    _weaningStartDate = ws != null ? DateTime.parse(ws) : DateTime.now().subtract(const Duration(days: 32));
     _gender = BabyGender.fromCode(gs);
     AppThemeController.instance.setGender(_gender);
 
@@ -489,7 +541,6 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     await prefs.setString('baby_gender', _gender.code);
   }
 
-  // 기한 만료 폐기(수량 0 처리) 또는 완전 삭제
   void _handleDiscardOrDeleteCube(CubeItem targetCube, {required bool isDiscardOnly}) {
     final prevQty = targetCube.quantity;
     final deletedIndex = _cubes.indexWhere((c) => c.id == targetCube.id);
@@ -501,10 +552,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       }
 
       if (isDiscardOnly) {
-        // 폐기 처리: 실물 수량을 0으로 만들고 보관함 하단(미보유 상태)으로 전환 -> 미래 식단 마감일 유지!
         targetCube.quantity = 0;
       } else {
-        // 완전 삭제
         _cubes.removeAt(deletedIndex);
       }
     });
@@ -536,6 +585,33 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     );
   }
 
+  String _buildBabySubtitle() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    int daysFromBirth = 182;
+    if (_birthDate != null) {
+      daysFromBirth = today.difference(DateTime(_birthDate!.year, _birthDate!.month, _birthDate!.day)).inDays + 1;
+    }
+    String stage;
+    if (daysFromBirth < 150) {
+      stage = '초기 1단계';
+    } else if (daysFromBirth < 210) {
+      stage = '초기 2단계';
+    } else if (daysFromBirth < 270) {
+      stage = '중기';
+    } else if (daysFromBirth < 360) {
+      stage = '후기';
+    } else {
+      stage = '완료기';
+    }
+
+    int weaningDays = 32;
+    if (_weaningStartDate != null) {
+      weaningDays = today.difference(DateTime(_weaningStartDate!.year, _weaningStartDate!.month, _weaningStartDate!.day)).inDays + 1;
+    }
+    return '생후 ${daysFromBirth}일 · $stage (D+$weaningDays)';
+  }
+
   void _showSettings() {
     DateTime b = _birthDate ?? DateTime.now();
     DateTime w = _weaningStartDate ?? DateTime.now();
@@ -545,28 +621,57 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: const Text('아기 성장 & 테마 설정', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('아기 성별 (테마 색상 즉시 변경)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                const Text('🌸 테마 색상 선택 (즉시 적용)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 Row(
                   children: [
                     Expanded(
                       child: InkWell(
                         onTap: () {
+                          setDState(() => g = BabyGender.none);
+                          AppThemeController.instance.setGender(BabyGender.none);
+                        },
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: g == BabyGender.none ? BabyGender.none.lightAccent : Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: g == BabyGender.none ? BabyGender.none.primary : Colors.grey.shade300,
+                              width: g == BabyGender.none ? 2 : 1,
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              const Text('🌱', style: TextStyle(fontSize: 20)),
+                              const SizedBox(height: 2),
+                              Text('밝은 민트', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: BabyGender.none.textColor)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () {
                           setDState(() => g = BabyGender.boy);
                           AppThemeController.instance.setGender(BabyGender.boy);
                         },
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(10),
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 8),
                           decoration: BoxDecoration(
                             color: g == BabyGender.boy ? BabyGender.boy.lightAccent : Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(10),
                             border: Border.all(
                               color: g == BabyGender.boy ? BabyGender.boy.primary : Colors.grey.shade300,
                               width: g == BabyGender.boy ? 2 : 1,
@@ -574,9 +679,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                           ),
                           child: Column(
                             children: [
-                              const Text('👦', style: TextStyle(fontSize: 20)),
+                              const Text('☁️', style: TextStyle(fontSize: 20)),
                               const SizedBox(height: 2),
-                              Text('남아 (하늘)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: BabyGender.boy.textColor)),
+                              Text('하늘색 (남아)', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: BabyGender.boy.textColor)),
                             ],
                           ),
                         ),
@@ -589,12 +694,12 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                           setDState(() => g = BabyGender.girl);
                           AppThemeController.instance.setGender(BabyGender.girl);
                         },
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(10),
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 8),
                           decoration: BoxDecoration(
                             color: g == BabyGender.girl ? BabyGender.girl.lightAccent : Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(10),
                             border: Border.all(
                               color: g == BabyGender.girl ? BabyGender.girl.primary : Colors.grey.shade300,
                               width: g == BabyGender.girl ? 2 : 1,
@@ -602,37 +707,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                           ),
                           child: Column(
                             children: [
-                              const Text('👧', style: TextStyle(fontSize: 20)),
+                              const Text('🎀', style: TextStyle(fontSize: 20)),
                               const SizedBox(height: 2),
-                              Text('여아 (핑크)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: BabyGender.girl.textColor)),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: InkWell(
-                        onTap: () {
-                          setDState(() => g = BabyGender.none);
-                          AppThemeController.instance.setGender(BabyGender.none);
-                        },
-                        borderRadius: BorderRadius.circular(8),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          decoration: BoxDecoration(
-                            color: g == BabyGender.none ? BabyGender.none.lightAccent : Colors.grey.shade100,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: g == BabyGender.none ? BabyGender.none.primary : Colors.grey.shade300,
-                              width: g == BabyGender.none ? 2 : 1,
-                            ),
-                          ),
-                          child: Column(
-                            children: [
-                              const Text('🌱', style: TextStyle(fontSize: 20)),
-                              const SizedBox(height: 2),
-                              Text('기본 (민트)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: BabyGender.none.textColor)),
+                              Text('베이비핑크 (여아)', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: BabyGender.girl.textColor)),
                             ],
                           ),
                         ),
@@ -678,7 +755,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                     Expanded(
                       child: OutlinedButton.icon(
                         icon: const Icon(Icons.download_rounded, size: 15),
-                        label: const Text('기존 웹앱 데이터 가져오기', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                        label: const Text('웹앱 데이터 가져오기', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 8),
                           foregroundColor: appPrimaryColor,
@@ -876,7 +953,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         if (count > 0) {
           final w = cube.unitWeight * count;
           totalWeight += w;
-          ingSummaries.add('${cube.name} ${w}g (${count}개)');
+          ingSummaries.add('${cube.displayName} ${w}g (${count}개)');
           cubeUsageMap[cube.id] = count;
 
           _recordTriedIngredient(cube.name, cube.category, cube.unitWeight, reaction: reaction);
@@ -903,7 +980,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         }
 
         final memo = reaction.isEmpty
-            ? (repeatDays > 1 ? '[${i + 1}/$repeatDays일차 계획]' : (isFuture ? '[예정] 식단 계획' : '특이사항 없음'))
+            ? (repeatDays > 1 ? '[${i + 1}/$repeatDays일차 계획]' : (isFuture ? '[예정] 식단 계획' : '반응 관찰 준비 완료'))
             : (repeatDays > 1 ? '[$repeatDays일 연속] $reaction' : reaction);
 
         _mealLogs.insert(
@@ -986,11 +1063,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         final newLog = MealLog(
           id: '${DateTime.now().millisecondsSinceEpoch}',
           mealType: mealType,
-          time: DateTime(date.year, date.month, date.day, 10, 0),
+          time: DateTime(date.year, date.month, date.day, 9, 30),
           ingredients: ['${cube.displayName} ${addedWeight}g (1개)'],
           cubeUsage: {cube.id: 1},
           totalGrams: addedWeight,
-          reaction: isFuture ? '[예정] 식단 계획' : '특이사항 없음',
+          reaction: isFuture ? '[예정] 식단 계획' : '반응 관찰 준비 완료',
           isPlanned: isFuture,
         );
         if (!isFuture) {
@@ -1009,6 +1086,36 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     );
   }
 
+  Widget _buildBottomNavItem(int index, IconData unselectedIcon, IconData selectedIcon, String label) {
+    final isSelected = _currentTabIndex == index;
+    return InkWell(
+      onTap: () => setState(() => _currentTabIndex = index),
+      borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isSelected ? selectedIcon : unselectedIcon,
+              size: 22,
+              color: isSelected ? appPrimaryColor : const Color(0xFF94A3B8),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+                color: isSelected ? appTextColor : const Color(0xFF94A3B8),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -1018,176 +1125,239 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     return ListenableBuilder(
       listenable: AppThemeController.instance,
       builder: (context, _) => Scaffold(
-        backgroundColor: appBgColor,
-        appBar: AppBar(
-          backgroundColor: Colors.white,
-          title: Row(
-            children: [
-              Text(AppThemeController.instance.gender.emoji, style: const TextStyle(fontSize: 20)),
-              const SizedBox(width: 8),
-              Text('또핑', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 19, color: appTextColor)),
-              const SizedBox(width: 6),
-              Text('토핑 이유식', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13, color: Colors.grey[600])),
-            ],
+        backgroundColor: const Color(0xFFF8FAFC),
+        // Modern Premium Header matching ui_redesign_preview.html
+        appBar: PreferredSize(
+          preferredSize: const Size.fromHeight(62),
+          child: Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9), width: 1)),
+            ),
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Row(
+                          children: [
+                            const Text(
+                              '또핑',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF0F172A),
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: appLightAccentColor,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: appPrimaryColor.withOpacity(0.4)),
+                              ),
+                              child: Text(
+                                '토핑 매니저',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  color: appTextColor,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _buildBabySubtitle(),
+                          style: const TextStyle(
+                            fontSize: 10.5,
+                            color: Color(0xFF94A3B8),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                    InkWell(
+                      onTap: _showSettings,
+                      borderRadius: BorderRadius.circular(17),
+                      child: Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(17),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
+                        alignment: Alignment.center,
+                        child: const Icon(Icons.settings_outlined, size: 18, color: Color(0xFF64748B)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
-          actions: [
-            IconButton(icon: Icon(Icons.settings_outlined, color: appTextColor), onPressed: _showSettings),
-          ],
         ),
-      body: IndexedStack(
-        index: _currentTabIndex,
-        children: [
-          MealCalendarTab(
-            mealLogs: _mealLogs,
-            cubes: _cubes,
-            triedIngredients: _triedIngredients,
-            birthDate: _birthDate,
-            weaningStartDate: _weaningStartDate,
-            onSwitchTab: (idx) => setState(() => _currentTabIndex = idx),
-            onAddQuickRescueMeal: _addQuickRescueMeal,
-            onEditMealFull: (l, t, tm, r, g, usages, ings) {
-              setState(() {
-                l.mealType = t;
-                l.time = tm;
-                l.reaction = r;
-                l.totalGrams = g;
-                l.cubeUsage = usages;
-                l.ingredients = ings;
-              });
-              _saveData();
-            },
-            onDeleteMeal: (l) {
-              setState(() {
-                if (!l.isPlanned) {
-                  l.cubeUsage.forEach((id, cnt) {
-                    final i = _cubes.indexWhere((c) => c.id == id);
-                    if (i != -1) _cubes[i].quantity += cnt;
+        body: IndexedStack(
+          index: _currentTabIndex,
+          children: [
+            MealCalendarTab(
+              mealLogs: _mealLogs,
+              cubes: _cubes,
+              triedIngredients: _triedIngredients,
+              birthDate: _birthDate,
+              weaningStartDate: _weaningStartDate,
+              onSwitchTab: (idx) => setState(() => _currentTabIndex = idx),
+              onAddQuickRescueMeal: _addQuickRescueMeal,
+              onEditMealFull: (l, t, tm, r, g, usages, ings) {
+                setState(() {
+                  l.mealType = t;
+                  l.time = tm;
+                  l.reaction = r;
+                  l.totalGrams = g;
+                  l.cubeUsage = usages;
+                  l.ingredients = ings;
+                });
+                _saveData();
+              },
+              onDeleteMeal: (l) {
+                setState(() {
+                  if (!l.isPlanned) {
+                    l.cubeUsage.forEach((id, cnt) {
+                      final i = _cubes.indexWhere((c) => c.id == id);
+                      if (i != -1) _cubes[i].quantity += cnt;
+                    });
+                  }
+                  _mealLogs.removeWhere((item) => item.id == l.id);
+                });
+                _saveData();
+              },
+              onCompleteMeal: _completePlannedMeal,
+              onUpdateReaction: (l, r) {
+                setState(() {
+                  l.reaction = r;
+                  l.cubeUsage.forEach((cubeId, count) {
+                    final cIdx = _cubes.indexWhere((c) => c.id == cubeId);
+                    if (cIdx != -1) {
+                      _recordTriedIngredient(_cubes[cIdx].name, _cubes[cIdx].category, _cubes[cIdx].unitWeight, reaction: r);
+                    }
                   });
-                }
-                _mealLogs.removeWhere((item) => item.id == l.id);
-              });
-              _saveData();
-            },
-            onCompleteMeal: _completePlannedMeal,
-            onUpdateReaction: (l, r) {
-              setState(() {
-                l.reaction = r;
-                l.cubeUsage.forEach((cubeId, count) {
-                  final cIdx = _cubes.indexWhere((c) => c.id == cubeId);
-                  if (cIdx != -1) {
-                    _recordTriedIngredient(_cubes[cIdx].name, _cubes[cIdx].category, _cubes[cIdx].unitWeight, reaction: r);
+                });
+                _saveData();
+              },
+            ),
+            CubeStorageHubTab(
+              cubes: _cubes,
+              mealLogs: _mealLogs,
+              triedIngredients: _triedIngredients,
+              onUpdateQty: (c, d) {
+                setState(() => c.quantity = (c.quantity + d).clamp(0, 999));
+                _saveData();
+              },
+              onAddCube: (c) {
+                setState(() {
+                  _cubes.insert(0, c);
+                  _recordTriedIngredient(c.name, c.category, c.unitWeight);
+                });
+                _saveData();
+              },
+              onEditCube: (c, n, cat, w, q, md, sl, subOpt) {
+                setState(() {
+                  c.name = n;
+                  c.category = cat;
+                  c.unitWeight = w;
+                  c.quantity = q;
+                  c.madeDate = md;
+                  c.expireDate = md.add(Duration(days: sl));
+                  c.subOption = subOpt;
+                  c.isPlannedOnly = false;
+                  _recordTriedIngredient(n, cat, w);
+                });
+                _saveData();
+              },
+              onDiscardCube: (c) => _handleDiscardOrDeleteCube(c, isDiscardOnly: true),
+              onDeleteCube: (c) => _handleDiscardOrDeleteCube(c, isDiscardOnly: false),
+              onRestock: (c, w, q, md, sl) {
+                setState(() {
+                  final existingIdx = _cubes.indexWhere((item) => item.id == c.id || item.name == c.name);
+                  if (existingIdx != -1) {
+                    _cubes[existingIdx].unitWeight = w;
+                    _cubes[existingIdx].quantity += q;
+                    _cubes[existingIdx].madeDate = md;
+                    _cubes[existingIdx].expireDate = md.add(Duration(days: sl));
+                    _cubes[existingIdx].isPlannedOnly = false;
+                  } else {
+                    _cubes.insert(
+                      0,
+                      CubeItem(
+                        id: DateTime.now().millisecondsSinceEpoch.toString(),
+                        name: c.name,
+                        category: c.category,
+                        unitWeight: w,
+                        quantity: q,
+                        madeDate: md,
+                        expireDate: md.add(Duration(days: sl)),
+                        subOption: c.subOption,
+                        isPlannedOnly: false,
+                      ),
+                    );
+                  }
+                  _recordTriedIngredient(c.name, c.category, w);
+                });
+                _saveData();
+              },
+            ),
+            MealLogTab(
+              cubes: _cubes,
+              triedIngredients: _triedIngredients,
+              birthDate: _birthDate,
+              weaningStartDate: _weaningStartDate,
+              onSaveMeal: _addMealRecord,
+              onAddCubeToStock: (c) {
+                setState(() {
+                  _cubes.insert(0, c);
+                  if (!c.isPlannedOnly) {
+                    _recordTriedIngredient(c.name, c.category, c.unitWeight);
                   }
                 });
-              });
-              _saveData();
-            },
+                _saveData();
+              },
+            ),
+          ],
+        ),
+        // Modern Custom Bottom Navigation Bar
+        bottomNavigationBar: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(top: BorderSide(color: Color(0xFFF1F5F9), width: 1)),
           ),
-          CubeStorageHubTab(
-            cubes: _cubes,
-            mealLogs: _mealLogs,
-            triedIngredients: _triedIngredients,
-            onUpdateQty: (c, d) {
-              setState(() => c.quantity = (c.quantity + d).clamp(0, 999));
-              _saveData();
-            },
-            onAddCube: (c) {
-              setState(() {
-                _cubes.insert(0, c);
-                _recordTriedIngredient(c.name, c.category, c.unitWeight);
-              });
-              _saveData();
-            },
-            onEditCube: (c, n, cat, w, q, md, sl, subOpt) {
-              setState(() {
-                c.name = n;
-                c.category = cat;
-                c.unitWeight = w;
-                c.quantity = q;
-                c.madeDate = md;
-                c.expireDate = md.add(Duration(days: sl));
-                c.subOption = subOpt;
-                c.isPlannedOnly = false;
-                _recordTriedIngredient(n, cat, w);
-              });
-              _saveData();
-            },
-            onDiscardCube: (c) => _handleDiscardOrDeleteCube(c, isDiscardOnly: true),
-            onDeleteCube: (c) => _handleDiscardOrDeleteCube(c, isDiscardOnly: false),
-            onRestock: (c, w, q, md, sl) {
-              setState(() {
-                final existingIdx = _cubes.indexWhere((item) => item.id == c.id || item.name == c.name);
-                if (existingIdx != -1) {
-                  _cubes[existingIdx].unitWeight = w;
-                  _cubes[existingIdx].quantity += q;
-                  _cubes[existingIdx].madeDate = md;
-                  _cubes[existingIdx].expireDate = md.add(Duration(days: sl));
-                  _cubes[existingIdx].isPlannedOnly = false;
-                } else {
-                  _cubes.insert(
-                    0,
-                    CubeItem(
-                      id: DateTime.now().millisecondsSinceEpoch.toString(),
-                      name: c.name,
-                      category: c.category,
-                      unitWeight: w,
-                      quantity: q,
-                      madeDate: md,
-                      expireDate: md.add(Duration(days: sl)),
-                      subOption: c.subOption,
-                      isPlannedOnly: false,
-                    ),
-                  );
-                }
-                _recordTriedIngredient(c.name, c.category, w);
-              });
-              _saveData();
-            },
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildBottomNavItem(0, Icons.calendar_today_outlined, Icons.calendar_month, '캘린더'),
+                  _buildBottomNavItem(1, Icons.grid_view_outlined, Icons.grid_view_rounded, '큐브보관함'),
+                  _buildBottomNavItem(2, Icons.edit_note_outlined, Icons.edit_note, '식단기록'),
+                ],
+              ),
+            ),
           ),
-          MealLogTab(
-            cubes: _cubes,
-            triedIngredients: _triedIngredients,
-            birthDate: _birthDate,
-            weaningStartDate: _weaningStartDate,
-            onSaveMeal: _addMealRecord,
-            onAddCubeToStock: (c) {
-              setState(() {
-                _cubes.insert(0, c);
-                if (!c.isPlannedOnly) {
-                  _recordTriedIngredient(c.name, c.category, c.unitWeight);
-                }
-              });
-              _saveData();
-            },
-          ),
-        ],
+        ),
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentTabIndex,
-        indicatorColor: appLightAccentColor,
-        backgroundColor: Colors.white,
-        elevation: 3,
-        onDestinationSelected: (idx) => setState(() => _currentTabIndex = idx),
-        destinations: [
-          NavigationDestination(
-            icon: const Icon(Icons.calendar_month_outlined),
-            selectedIcon: Icon(Icons.calendar_month, color: appPrimaryColor),
-            label: '캘린더',
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.grid_view_outlined),
-            selectedIcon: Icon(Icons.grid_view, color: appPrimaryColor),
-            label: '큐브보관함',
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.edit_note_outlined),
-            selectedIcon: Icon(Icons.edit_note, color: appPrimaryColor),
-            label: '식단기록',
-          ),
-        ],
-      ),
-    ),
-  );
-}
+    );
+  }
 }
 
 String calculateDdayString(DateTime targetDate, DateTime? birthDate, DateTime? weaningStartDate) {
@@ -1211,7 +1381,7 @@ String calculateDdayString(DateTime targetDate, DateTime? birthDate, DateTime? w
 }
 
 // ==========================================
-// 1. 식단 기록 화면
+// 1. 식단 기록 화면 (MealLogTab)
 // ==========================================
 class MealLogTab extends StatefulWidget {
   final List<CubeItem> cubes;
@@ -1227,7 +1397,15 @@ class MealLogTab extends StatefulWidget {
   }) onSaveMeal;
   final Function(CubeItem) onAddCubeToStock;
 
-  const MealLogTab({super.key, required this.cubes, required this.triedIngredients, required this.birthDate, required this.weaningStartDate, required this.onSaveMeal, required this.onAddCubeToStock});
+  const MealLogTab({
+    super.key,
+    required this.cubes,
+    required this.triedIngredients,
+    required this.birthDate,
+    required this.weaningStartDate,
+    required this.onSaveMeal,
+    required this.onAddCubeToStock,
+  });
 
   @override
   State<MealLogTab> createState() => _MealLogTabState();
@@ -1241,13 +1419,8 @@ class _MealLogTabState extends State<MealLogTab> {
   final Map<String, int> _selectedQuantities = {};
   final TextEditingController _reactionController = TextEditingController();
 
-  final List<String> _attitudeTags = ['완식', '거의 다 먹음', '절반 남김', '뱉어냄'];
-  final List<String> _skinTags = ['피부 정상', '입주변 붉어짐', '두드러기/발진', '눈 비빔/가려움'];
-  final List<String> _stoolTags = ['황금변', '된변', '무른변', '설사', '대변 X'];
-  final Set<String> _activeTags = {};
 
   int get _repeatDays => DateTime(_endDate.year, _endDate.month, _endDate.day).difference(DateTime(_startDate.year, _startDate.month, _startDate.day)).inDays + 1;
-  bool get _isFutureDate => DateTime(_startDate.year, _startDate.month, _startDate.day).isAfter(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day));
 
   void _showTriedHistoryDialog() {
     showDialog(
@@ -1257,6 +1430,7 @@ class _MealLogTabState extends State<MealLogTab> {
           ..sort((a, b) => a.category.sortOrder.compareTo(b.category.sortOrder));
 
         return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: const Text('먹어본 재료 다시 담기', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           content: SizedBox(
             width: double.maxFinite,
@@ -1268,7 +1442,7 @@ class _MealLogTabState extends State<MealLogTab> {
                 : ListView.separated(
                     shrinkWrap: true,
                     itemCount: sortedTried.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
                     itemBuilder: (context, idx) {
                       final item = sortedTried[idx];
                       final existingCubeIdx = widget.cubes.indexWhere((c) => c.name == item.name);
@@ -1282,9 +1456,9 @@ class _MealLogTabState extends State<MealLogTab> {
                             Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                             const SizedBox(width: 6),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                              decoration: BoxDecoration(color: item.category.bgColor, borderRadius: BorderRadius.circular(4)),
-                              child: Text(item.category.label, style: TextStyle(fontSize: 10, color: item.category.textColor, fontWeight: FontWeight.bold)),
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                              decoration: BoxDecoration(color: item.category.bgColor, borderRadius: BorderRadius.circular(6)),
+                              child: Text(item.category.label, style: TextStyle(fontSize: 9.5, color: item.category.textColor, fontWeight: FontWeight.bold)),
                             ),
                           ],
                         ),
@@ -1292,7 +1466,7 @@ class _MealLogTabState extends State<MealLogTab> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '기존 용량 ${item.lastUnitWeight}g · ${hasStock ? "현재 보유중 (${widget.cubes[existingCubeIdx].quantity}개)" : "현재 재고 없음 (재제작 필요)"}',
+                              '기존 용량 ${item.lastUnitWeight}g · ${hasStock ? "보관함 잔여 (${widget.cubes[existingCubeIdx].quantity}개)" : "현재 재고 없음"}',
                               style: TextStyle(fontSize: 11, color: hasStock ? appPrimaryColor : const Color(0xFFE53935), fontWeight: FontWeight.w600),
                             ),
                             Text(
@@ -1305,6 +1479,8 @@ class _MealLogTabState extends State<MealLogTab> {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: appPrimaryColor,
                             foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                             visualDensity: VisualDensity.compact,
                             padding: const EdgeInsets.symmetric(horizontal: 10),
                           ),
@@ -1328,7 +1504,7 @@ class _MealLogTabState extends State<MealLogTab> {
                             }
                             Navigator.pop(ctx);
                           },
-                          child: const Text('담기', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          child: const Text('담기', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                         ),
                       );
                     },
@@ -1352,13 +1528,14 @@ class _MealLogTabState extends State<MealLogTab> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: const Text('새 식재료 직접 추가', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: '식재료명 (예: 비트, 닭안심)')),
+                TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: '식재료명 (예: 단호박, 비트)')),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<FoodCategory>(
                   value: cat,
@@ -1382,7 +1559,7 @@ class _MealLogTabState extends State<MealLogTab> {
                         label: Text(opt, style: TextStyle(fontSize: 11, fontWeight: isSel ? FontWeight.bold : FontWeight.normal, color: isSel ? Colors.white : Colors.black87)),
                         selected: isSel,
                         selectedColor: appPrimaryColor,
-                        backgroundColor: const Color(0xFFF1F3F5),
+                        backgroundColor: const Color(0xFFF1F5F9),
                         showCheckmark: false,
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
                         onSelected: (val) => setDState(() => selectedSubOption = val ? opt : ''),
@@ -1402,7 +1579,7 @@ class _MealLogTabState extends State<MealLogTab> {
                         label: Text(opt, style: TextStyle(fontSize: 11, fontWeight: isSel ? FontWeight.bold : FontWeight.normal, color: isSel ? Colors.white : Colors.black87)),
                         selected: isSel,
                         selectedColor: appPrimaryColor,
-                        backgroundColor: const Color(0xFFF1F3F5),
+                        backgroundColor: const Color(0xFFF1F5F9),
                         showCheckmark: false,
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
                         onSelected: (val) => setDState(() => selectedSubOption = val ? opt : ''),
@@ -1478,149 +1655,21 @@ class _MealLogTabState extends State<MealLogTab> {
       });
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // 1. 날짜 및 기간 설정 카드 (웹앱 방식 달력 선택 + 빠른 설정)
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: _isFutureDate ? const Color(0xFFF0FDF8) : Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: _isFutureDate ? const Color(0xFFA7E9D1) : Colors.grey.shade200),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(_repeatDays > 1 ? Icons.date_range : Icons.calendar_today_outlined, color: appPrimaryColor, size: 22),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _repeatDays > 1 ? '$_repeatDays일 연속 동일 식단' : '식단 날짜',
-                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: appPrimaryColor),
-                          ),
-                          Text(
-                            _repeatDays > 1 ? '${_startDate.month}/${_startDate.day} ~ ${_endDate.month}/${_endDate.day}' : '${_startDate.year}년 ${_startDate.month}월 ${_startDate.day}일',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: appTextColor),
-                          ),
-                        ],
-                      ),
-                    ),
-                    ElevatedButton.icon(
-                      onPressed: () async {
-                        final r = await showDateRangePicker(
-                          context: context,
-                          initialDateRange: DateTimeRange(start: _startDate, end: _endDate),
-                          firstDate: DateTime.now().subtract(const Duration(days: 90)),
-                          lastDate: DateTime.now().add(const Duration(days: 60)),
-                        );
-                        if (r != null) setState(() { _startDate = r.start; _endDate = r.end; });
-                      },
-                      icon: const Icon(Icons.calendar_month, size: 14),
-                      label: const Text('기간 달력', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                      style: ElevatedButton.styleFrom(backgroundColor: appLightAccentColor, foregroundColor: appTextColor, elevation: 0),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Text('빠른 설정: ', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
-                    const SizedBox(width: 8),
-                    InkWell(
-                      onTap: () => setState(() => _endDate = _startDate),
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                        decoration: BoxDecoration(
-                          color: _repeatDays == 1 ? appPrimaryColor : const Color(0xFFF1F3F5),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: _repeatDays == 1 ? appPrimaryColor : Colors.grey.shade300),
-                        ),
-                        child: Text('하루만', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _repeatDays == 1 ? Colors.white : Colors.black87)),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    InkWell(
-                      onTap: () => setState(() => _endDate = _startDate.add(const Duration(days: 2))),
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                        decoration: BoxDecoration(
-                          color: _repeatDays == 3 ? appPrimaryColor : const Color(0xFFF1F3F5),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: _repeatDays == 3 ? appPrimaryColor : Colors.grey.shade300),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.flash_on, size: 14, color: _repeatDays == 3 ? Colors.white : Colors.amber.shade800),
-                            const SizedBox(width: 2),
-                            Text('3일 테스트', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _repeatDays == 3 ? Colors.white : Colors.black87)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                if (ddayStr.isNotEmpty && _repeatDays == 1) ...[
-                  const SizedBox(height: 10),
-                  Text(ddayStr, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: appPrimaryColor)),
-                ],
-                const Divider(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('시간: ${_selectedTime.hour.toString().padLeft(2, '0')}:${_selectedTime.minute.toString().padLeft(2, '0')}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    TextButton.icon(
-                      icon: const Icon(Icons.schedule, size: 14),
-                      label: const Text('시간 변경', style: TextStyle(fontSize: 12)),
-                      onPressed: () async {
-                        final t = await showTimePicker(context: context, initialTime: _selectedTime);
-                        if (t != null) setState(() => _selectedTime = t);
-                      },
-                    ),
-                  ],
-                ),
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+              boxShadow: const [
+                BoxShadow(color: Color(0x06000000), blurRadius: 6, offset: Offset(0, 2)),
               ],
             ),
-          ),
-          const SizedBox(height: 16),
-
-          // 2. 끼니 선택
-          const Text('끼니 선택', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF234E42))),
-          const SizedBox(height: 8),
-          Row(
-            children: MealType.values.map((m) {
-              final isSel = _selectedMealType == m;
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: InkWell(
-                  onTap: () => setState(() => _selectedMealType = m),
-                  borderRadius: BorderRadius.circular(8),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: isSel ? m.primaryColor : m.bgColor,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: isSel ? m.primaryColor : m.primaryColor.withOpacity(0.4)),
-                    ),
-                    child: Text(m.label, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isSel ? Colors.white : m.primaryColor)),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 16),
-
-          // 3. 토핑 큐브 선택
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1629,130 +1678,370 @@ class _MealLogTabState extends State<MealLogTab> {
                   children: [
                     Row(
                       children: [
-                        const Text('토핑 큐브 담기 (1끼 기준)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF234E42))),
-                        IconButton(
-                          icon: Icon(Icons.info_outline, size: 17, color: appPrimaryColor),
-                          onPressed: () => showDialog(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              title: const Text('식재료 정렬 안내', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                              content: const Text('[ 곡류 ➔ 단백질 ➔ 채소 ➔ 과일 ➔ 기타 ]\n순서로 자동 정렬되어 표시됩니다.', style: TextStyle(fontSize: 13, height: 1.5)),
-                              actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('확인'))],
-                            ),
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: appLightAccentColor,
+                            borderRadius: BorderRadius.circular(12),
                           ),
+                          alignment: Alignment.center,
+                          child: const Text('📅', style: TextStyle(fontSize: 18)),
+                        ),
+                        const SizedBox(width: 10),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _repeatDays > 1 ? '$_repeatDays일 연속 동일 식단' : '식단 날짜',
+                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: appTextColor),
+                            ),
+                            const SizedBox(height: 1),
+                            Text(
+                              _repeatDays > 1 ? '${_startDate.month}/${_startDate.day} ~ ${_endDate.month}/${_endDate.day}' : '${_startDate.year}년 ${_startDate.month}월 ${_startDate.day}일',
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                    Text('총 $totalG g', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: appPrimaryColor)),
+                    InkWell(
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: _startDate,
+                          firstDate: DateTime.now().subtract(const Duration(days: 90)),
+                          lastDate: DateTime.now().add(const Duration(days: 90)),
+                        );
+                        if (picked != null) {
+                          setState(() {
+                            _startDate = picked;
+                            _endDate = picked;
+                          });
+                        }
+                      },
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: appLightAccentColor,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: appPrimaryColor.withOpacity(0.4)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text('📅', style: TextStyle(fontSize: 12)),
+                            const SizedBox(width: 4),
+                            Text('달력 선택', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: appTextColor)),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
-                if (totalG > 0) ...[
-                  const SizedBox(height: 10),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: SizedBox(
-                      height: 8,
-                      child: Row(
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.only(top: 10),
+                  decoration: const BoxDecoration(
+                    border: Border(top: BorderSide(color: Color(0xFFF1F5F9))),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
                         children: [
-                          if (grainG > 0) Expanded(flex: grainG, child: Container(color: const Color(0xFFF59F00))),
-                          if (proteinG > 0) Expanded(flex: proteinG, child: Container(color: const Color(0xFFE53935))),
-                          if (veggieG > 0) Expanded(flex: veggieG, child: Container(color: const Color(0xFF20C997))),
-                          if (fruitG > 0) Expanded(flex: fruitG, child: Container(color: const Color(0xFF0C5460))),
-                          if (etcG > 0) Expanded(flex: etcG, child: Container(color: const Color(0xFF868E96))),
+                          const Text('빠른 설정: ', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
+                          const SizedBox(width: 6),
+                          InkWell(
+                            onTap: () => setState(() => _endDate = _startDate),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: _repeatDays == 1 ? appPrimaryColor : const Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: _repeatDays == 1 ? appPrimaryColor : const Color(0xFFE2E8F0)),
+                              ),
+                              child: Text(
+                                '하루만',
+                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _repeatDays == 1 ? Colors.white : const Color(0xFF475569)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          InkWell(
+                            onTap: () => setState(() => _endDate = _startDate.add(const Duration(days: 2))),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: _repeatDays == 3 ? appPrimaryColor : const Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: _repeatDays == 3 ? appPrimaryColor : const Color(0xFFE2E8F0)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.flash_on, size: 12, color: _repeatDays == 3 ? Colors.white : Colors.amber.shade800),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    '3일 테스트',
+                                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _repeatDays == 3 ? Colors.white : const Color(0xFF475569)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                         ],
+                      ),
+                      if (ddayStr.isNotEmpty && _repeatDays == 1)
+                        Text(ddayStr, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: appTextColor)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // 2. 끼니 선택 (1끼 / 2끼 / 3끼 / 간식)
+          const Text('끼니 선택', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12, color: Color(0xFF334155))),
+          const SizedBox(height: 6),
+          Row(
+            children: MealType.values.map((m) {
+              final isSel = _selectedMealType == m;
+              return Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2.5),
+                  child: InkWell(
+                    onTap: () => setState(() => _selectedMealType = m),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isSel ? appPrimaryColor : Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: isSel ? appPrimaryColor : const Color(0xFFE2E8F0)),
+                        boxShadow: isSel ? [BoxShadow(color: appPrimaryColor.withOpacity(0.3), blurRadius: 4, offset: const Offset(0, 1))] : null,
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        m.label,
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: isSel ? Colors.white : const Color(0xFF475569)),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('곡류 ${grainG}g · 단백질 ${proteinG}g · 채소 ${veggieG}g', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade700)),
-                      Text('총 ${totalG}g', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: appPrimaryColor)),
-                    ],
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 12),
+
+          // 3. 실시간 이유식 볼 채우기 게이지
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+              boxShadow: const [
+                BoxShadow(color: Color(0x06000000), blurRadius: 6, offset: Offset(0, 2)),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Row(
+                      children: [
+                        Text('🥣', style: TextStyle(fontSize: 16)),
+                        SizedBox(width: 6),
+                        Text('이유식 볼 채우기', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+                      ],
+                    ),
+                    Text(
+                      '${totalG}g / 권장 80g',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: appTextColor),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    height: 9,
+                    color: const Color(0xFFF1F5F9),
+                    child: Row(
+                      children: [
+                        if (grainG > 0) Expanded(flex: grainG, child: Container(color: const Color(0xFFF59F00))),
+                        if (proteinG > 0) Expanded(flex: proteinG, child: Container(color: const Color(0xFFEF4444))),
+                        if (veggieG > 0) Expanded(flex: veggieG, child: Container(color: const Color(0xFF10B981))),
+                        if (fruitG > 0) Expanded(flex: fruitG, child: Container(color: const Color(0xFF06B6D4))),
+                        if (etcG > 0) Expanded(flex: etcG, child: Container(color: const Color(0xFF868E96))),
+                      ],
+                    ),
                   ),
-                ],
+                ),
                 const SizedBox(height: 8),
-                sortedCubes.isEmpty
-                    ? const Text('등록된 큐브가 없습니다.')
-                    : Column(
-                        children: sortedCubes.map((cube) {
-                          final count = _selectedQuantities[cube.id] ?? 0;
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 6),
-                            child: Row(
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('곡류 ${grainG}g', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                    Text('단백질 ${proteinG}g', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                    Text('채소 ${veggieG}g', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                    if (fruitG > 0) Text('과일 ${fruitG}g', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // 4. 토핑 큐브 선택 리스트
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+              boxShadow: const [
+                BoxShadow(color: Color(0x06000000), blurRadius: 6, offset: Offset(0, 2)),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('토핑 큐브 선택 (${_selectedMealType.label} 기준)', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF0F172A))),
+                    const Text('보관함 실시간 연동', style: TextStyle(fontSize: 10, color: Color(0xFF94A3B8))),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                ...sortedCubes.map((cube) {
+                  final count = _selectedQuantities[cube.id] ?? 0;
+                  final emoji = getFoodEmoji(cube.name);
+
+                  return Container(
+                    padding: const EdgeInsets.symmetric(vertical: 7),
+                    decoration: const BoxDecoration(
+                      border: Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Text(emoji, style: const TextStyle(fontSize: 18)),
+                            const SizedBox(width: 8),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(color: cube.category.bgColor, borderRadius: BorderRadius.circular(6)),
-                                  child: Text(cube.category.label, style: TextStyle(color: cube.category.textColor, fontSize: 10, fontWeight: FontWeight.bold)),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Text(getFoodEmoji(cube.name)),
-                                          const SizedBox(width: 4),
-                                          Text('${cube.displayName} (${cube.unitWeight}g)', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                                          if (cube.isPlannedOnly) ...[
-                                            const SizedBox(width: 6),
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                                              decoration: BoxDecoration(color: const Color(0xFFF3E5F5), borderRadius: BorderRadius.circular(4), border: Border.all(color: const Color(0xFFCE93D8))),
-                                              child: const Text('신규 제작필요', style: TextStyle(fontSize: 10, color: Color(0xFF9C27B0), fontWeight: FontWeight.bold)),
-                                            ),
-                                          ] else if (cube.quantity == 0) ...[
-                                            const SizedBox(width: 6),
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                                              decoration: BoxDecoration(color: const Color(0xFFFFEBEE), borderRadius: BorderRadius.circular(4), border: Border.all(color: const Color(0xFFEF9A9A))),
-                                              child: const Text('재제작 필요', style: TextStyle(fontSize: 10, color: Color(0xFFE53935), fontWeight: FontWeight.bold)),
-                                            ),
-                                          ],
-                                        ],
+                                Row(
+                                  children: [
+                                    Text(cube.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A))),
+                                    if (cube.subOption.isNotEmpty) ...[
+                                      const SizedBox(width: 4),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                        decoration: BoxDecoration(color: appLightAccentColor, borderRadius: BorderRadius.circular(4)),
+                                        child: Text(cube.subOption, style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: appTextColor)),
                                       ),
-                                      if (!cube.isPlannedOnly)
-                                        Text('재고 ${cube.quantity}개 · 사용기한 ${cube.dDayText}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
                                     ],
-                                  ),
+                                    const SizedBox(width: 4),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                      decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(4)),
+                                      child: Text('${cube.unitWeight}g', style: const TextStyle(fontSize: 9, color: Color(0xFF64748B))),
+                                    ),
+                                  ],
                                 ),
-                                IconButton(icon: const Icon(Icons.remove_circle_outline, size: 20), onPressed: count > 0 ? () => setState(() => _selectedQuantities[cube.id] = count - 1) : null),
-                                Text('$count', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                                IconButton(icon: const Icon(Icons.add_circle_outline, size: 20), onPressed: () => setState(() => _selectedQuantities[cube.id] = count + 1)),
+                                const SizedBox(height: 1),
+                                Text(
+                                  '보관함 잔여: ${cube.quantity}개 (${cube.quantity * cube.unitWeight}g)',
+                                  style: const TextStyle(fontSize: 10, color: Color(0xFF94A3B8)),
+                                ),
                               ],
                             ),
-                          );
-                        }).toList(),
-                      ),
-                const Divider(height: 18),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            InkWell(
+                              onTap: count > 0 ? () => setState(() => _selectedQuantities[cube.id] = count - 1) : null,
+                              borderRadius: BorderRadius.circular(6),
+                              child: Container(
+                                width: 24,
+                                height: 24,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF1F5F9),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                alignment: Alignment.center,
+                                child: Text('-', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: count > 0 ? const Color(0xFF334155) : const Color(0xFFCBD5E1))),
+                              ),
+                            ),
+                            Container(
+                              width: 26,
+                              alignment: Alignment.center,
+                              child: Text('$count', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+                            ),
+                            InkWell(
+                              onTap: () => setState(() => _selectedQuantities[cube.id] = count + 1),
+                              borderRadius: BorderRadius.circular(6),
+                              child: Container(
+                                width: 24,
+                                height: 24,
+                                decoration: BoxDecoration(
+                                  color: appLightAccentColor,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                alignment: Alignment.center,
+                                child: Text('+', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: appTextColor)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+                const SizedBox(height: 10),
                 Row(
                   children: [
                     Expanded(
-                      child: OutlinedButton(
-                        onPressed: _showTriedHistoryDialog,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: appTextColor,
-                          side: BorderSide(color: appPrimaryColor),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: InkWell(
+                        onTap: _showTriedHistoryDialog,
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          alignment: Alignment.center,
+                          child: const Text('먹어본 재료 추가', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
                         ),
-                        child: const Text('먹어본 재료 다시 담기', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: OutlinedButton(
-                        onPressed: _showAddUnregisteredDialog,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF6A1B9A),
-                          side: const BorderSide(color: Color(0xFFCE93D8)),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: InkWell(
+                        onTap: _showAddUnregisteredDialog,
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          alignment: Alignment.center,
+                          child: const Text('+ 새 식재료', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
                         ),
-                        child: const Text('미등록 재료 추가', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
                       ),
                     ),
                   ],
@@ -1760,105 +2049,79 @@ class _MealLogTabState extends State<MealLogTab> {
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
 
-          // 4. 빠른 반응 체크
-          if (!_isFutureDate && _repeatDays == 1) ...[
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200)),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('빠른 반응 체크', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF234E42))),
-                  const SizedBox(height: 10),
-                  _buildTagGroup('피부/알레르기', _skinTags, const Color(0xFFE53935)),
-                  const SizedBox(height: 8),
-                  _buildTagGroup('배변 상태', _stoolTags, const Color(0xFFF57C00)),
-                  const SizedBox(height: 8),
-                  _buildTagGroup('식사 태도', _attitudeTags, appPrimaryColor),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-
+          // 5. 메모 입력
           TextField(
             controller: _reactionController,
+            style: const TextStyle(fontSize: 12),
             decoration: InputDecoration(
-              labelText: _repeatDays > 1 ? '연속 식단 공통 메모' : '식단 계획 / 아기 반응 메모',
+              hintText: '식단 계획 / 아기 상태 메모 입력',
+              hintStyle: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
               filled: true,
               fillColor: Colors.white,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Color(0xFFE2E8F0))),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: appPrimaryColor, width: 1.5)),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
+          // 6. 저장 버튼
           SizedBox(
             width: double.infinity,
             height: 48,
             child: ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: appPrimaryColor, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: appPrimaryColor,
+                foregroundColor: Colors.white,
+                elevation: 2,
+                shadowColor: appPrimaryColor.withOpacity(0.4),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
               onPressed: () {
-                if (_selectedQuantities.isEmpty) return;
+                if (_selectedQuantities.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('최소 1개 이상의 큐브를 선택해 주세요.')),
+                  );
+                  return;
+                }
                 final dt = DateTime(_startDate.year, _startDate.month, _startDate.day, _selectedTime.hour, _selectedTime.minute);
                 Map<CubeItem, int> selected = {};
                 for (var c in widget.cubes) {
                   if (_selectedQuantities.containsKey(c.id)) selected[c] = _selectedQuantities[c.id]!;
                 }
-                widget.onSaveMeal(mealType: _selectedMealType, startDate: dt, repeatDays: _repeatDays, selectedCubes: selected, reaction: _reactionController.text.trim());
+                widget.onSaveMeal(
+                  mealType: _selectedMealType,
+                  startDate: dt,
+                  repeatDays: _repeatDays,
+                  selectedCubes: selected,
+                  reaction: _reactionController.text.trim(),
+                );
                 setState(() {
                   _selectedQuantities.clear();
                   _reactionController.clear();
                   _endDate = _startDate;
                 });
               },
-              child: Text(_repeatDays > 1 ? '$_repeatDays일 연속 식단 저장하기' : '식단 저장하기', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+              child: Text(
+                _repeatDays > 1
+                    ? '$_repeatDays일 연속 식단 저장하기 ($totalG g)'
+                    : '${_startDate.month}월 ${_startDate.day}일 ${_selectedMealType.label} 식단 계획 저장하기 ($totalG g)',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+              ),
             ),
           ),
+          const SizedBox(height: 16),
         ],
       ),
-    );
-  }
-
-  Widget _buildTagGroup(String title, List<String> tags, Color color) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade600)),
-        const SizedBox(height: 4),
-        Wrap(
-          spacing: 6,
-          runSpacing: 4,
-          children: tags.map((t) {
-            final isSel = _activeTags.contains(t);
-            return InkWell(
-              onTap: () {
-                setState(() {
-                  if (isSel) _activeTags.remove(t); else _activeTags.add(t);
-                  _reactionController.text = _activeTags.join(', ');
-                });
-              },
-              borderRadius: BorderRadius.circular(6),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                decoration: BoxDecoration(
-                  color: isSel ? color : const Color(0xFFF1F3F5),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: isSel ? color : Colors.grey.shade300),
-                ),
-                child: Text(t, style: TextStyle(fontSize: 11, fontWeight: isSel ? FontWeight.bold : FontWeight.normal, color: isSel ? Colors.white : Colors.black87)),
-              ),
-            );
-          }).toList(),
-        ),
-      ],
     );
   }
 }
 
 // ==========================================
-// 2. 캘린더 화면
+// 2. 캘린더 화면 (MealCalendarTab)
 // ==========================================
 class MealCalendarTab extends StatefulWidget {
   final List<MealLog> mealLogs;
@@ -1893,7 +2156,6 @@ class MealCalendarTab extends StatefulWidget {
 }
 
 class _MealCalendarTabState extends State<MealCalendarTab> {
-  bool _isWeekView = false;
   late DateTime _focusedDate;
   late DateTime _selectedDate;
 
@@ -1911,6 +2173,8 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
 
   bool _isSameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
 
+  String _getKoreanWeekday(DateTime d) => ['월', '화', '수', '목', '금', '토', '일'][d.weekday - 1];
+
   List<MealLog> _getLogsForDate(DateTime d) {
     final list = widget.mealLogs.where((l) => _isSameDay(l.time, d)).toList();
     list.sort((a, b) {
@@ -1924,20 +2188,18 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
     List<String> news = [];
     final curDay = DateTime(log.time.year, log.time.month, log.time.day);
 
-    // 1) 이 날짜(curDay) 이전의 모든 식단에 등장했던 식재료 이름 수집
     final past = widget.mealLogs.where((l) => DateTime(l.time.year, l.time.month, l.time.day).isBefore(curDay)).toList();
     Set<String> pastNames = {};
     for (var pl in past) {
       for (var ing in pl.ingredients) {
-        final name = ing.split(' ').first.trim();
+        final name = ing.split(' ').first.replaceAll(RegExp(r'\(.*\)'), '').trim();
         if (name.isNotEmpty) pastNames.add(name);
       }
     }
 
-    // 2) 현재 식단에 들어간 식재료 목록 수집 (ingredients 문자열 및 cubeUsage 양쪽 모두 확인)
     Set<String> curMealIngredients = {};
     for (var ing in log.ingredients) {
-      final name = ing.split(' ').first.trim();
+      final name = ing.split(' ').first.replaceAll(RegExp(r'\(.*\)'), '').trim();
       if (name.isNotEmpty) curMealIngredients.add(name);
     }
     log.cubeUsage.forEach((id, count) {
@@ -1950,13 +2212,39 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
       }
     });
 
-    // 3) 과거 식단에 한 번도 없었던 식재료라면, 큐브 제작 완료/보관함 이동 여부와 상관없이 무조건 '첫 시도'로 유지!
     for (var name in curMealIngredients) {
       if (!pastNames.contains(name) && !news.contains(name)) {
         news.add(name);
       }
     }
     return news;
+  }
+
+  void _showFirstTryGuideDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.info_outline, color: Color(0xFFF59F00), size: 20),
+            SizedBox(width: 8),
+            Text('첫 시도 알레르기 관찰 가이드', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: const Text(
+          '처음 먹는 식재료는 오전 1끼에 급여하고, 식후 2~3시간 동안 아기의 반응을 주의 깊게 살펴주세요.\n\n'
+          '• 입 주변 붉어짐이나 피부 발진\n'
+          '• 눈 비빔 또는 가려움 증상\n'
+          '• 갑작스러운 설사나 구토\n\n'
+          '특이 반응 발생 시 즉시 [반응 기록]에 남겨두시면 다음 식단 계획 시 안전하게 참고할 수 있습니다.',
+          style: TextStyle(fontSize: 12.5, height: 1.55),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('확인')),
+        ],
+      ),
+    );
   }
 
   void _showEditMealDialog(MealLog log) {
@@ -1976,6 +2264,7 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
           });
 
           return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             title: const Text('식단 수정', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             content: SizedBox(
               width: double.maxFinite,
@@ -2000,7 +2289,7 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                           children: [
                             Text(getFoodEmoji(c.name)),
                             const SizedBox(width: 6),
-                            Expanded(child: Text('${c.name} (${c.unitWeight}g)', style: TextStyle(fontSize: 12, fontWeight: count > 0 ? FontWeight.bold : FontWeight.normal))),
+                            Expanded(child: Text('${c.displayName} (${c.unitWeight}g)', style: TextStyle(fontSize: 12, fontWeight: count > 0 ? FontWeight.bold : FontWeight.normal))),
                             IconButton(
                               icon: const Icon(Icons.remove_circle_outline, size: 18),
                               onPressed: count > 0
@@ -2065,14 +2354,14 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
             actions: [
               TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF3EB489), foregroundColor: Colors.white),
+                style: ElevatedButton.styleFrom(backgroundColor: appPrimaryColor, foregroundColor: Colors.white),
                 onPressed: () {
                   final newDt = DateTime(log.time.year, log.time.month, log.time.day, currentTime.hour, currentTime.minute);
                   List<String> newIngs = [];
                   editUsage.forEach((id, cnt) {
                     if (cnt > 0) {
                       final c = widget.cubes.firstWhere((item) => item.id == id, orElse: () => CubeItem(id: '', name: '', category: FoodCategory.etc, unitWeight: 10, quantity: 0, madeDate: DateTime.now(), expireDate: DateTime.now()));
-                      newIngs.add('${c.name} ${c.unitWeight * cnt}g ($cnt개)');
+                      newIngs.add('${c.displayName} ${c.unitWeight * cnt}g ($cnt개)');
                     }
                   });
 
@@ -2088,6 +2377,43 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
     );
   }
 
+  void _showReactionDialog(MealLog log) {
+    final ctrl = TextEditingController(text: log.reaction);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('반응 및 알레르기 기록', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Wrap(
+              spacing: 4,
+              children: [..._skinTags, ..._stoolTags, ..._attitudeTags].map((t) => ActionChip(
+                label: Text(t, style: const TextStyle(fontSize: 11)),
+                onPressed: () => ctrl.text = ctrl.text.isEmpty ? t : '${ctrl.text}, $t',
+              )).toList(),
+            ),
+            const SizedBox(height: 8),
+            TextField(controller: ctrl, decoration: const InputDecoration(labelText: '메모')),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: appPrimaryColor, foregroundColor: Colors.white),
+            onPressed: () {
+              widget.onUpdateReaction(log, ctrl.text.trim());
+              Navigator.pop(ctx);
+            },
+            child: const Text('저장'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 큐브 추가 제안 배너 (노란/앰버 계열 그라데이션 + 친근한 어투)
   Widget _buildRescueBanner(List<MealLog> logs) {
     final expiring = widget.cubes.where((c) => !c.isPlannedOnly && c.quantity > 0 && c.daysRemaining >= 0 && c.daysRemaining <= 2).toList();
     if (expiring.isEmpty) return const SizedBox.shrink();
@@ -2112,48 +2438,491 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
     final dText = cube.daysRemaining == 0 ? '오늘 만료' : '만료 ${cube.daysRemaining}일 전';
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(14, 4, 14, 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 6),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF9DB),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFFFEE8A)),
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFFFBEB), Color(0xFFFEF3C7)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFFDE68A)),
+        boxShadow: const [
+          BoxShadow(color: Color(0x06000000), blurRadius: 4, offset: Offset(0, 1)),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('💡', style: TextStyle(fontSize: 14)),
-              const SizedBox(width: 6),
-              const Text('큐브 추가 제안', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFFB45309))),
-              const SizedBox(width: 6),
+              const Text('🥗', style: TextStyle(fontSize: 20)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Text('큐브 추가 제안', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Color(0xFF78350F))),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF59E0B),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Text('영양 찰떡궁합 ✨', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${cube.displayName}($dText)가 아직 식단에 없어요! 오늘 1끼(소고기)에 10g 쏙 넣어보세요. $synergyHint',
+                      style: const TextStyle(fontSize: 11, color: Color(0xFF78350F), height: 1.35),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: InkWell(
+              onTap: () => widget.onAddQuickRescueMeal(_selectedDate, MealType.first, cube),
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF59E0B),
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: const [
+                    BoxShadow(color: Color(0x1F000000), blurRadius: 3, offset: Offset(0, 1)),
+                  ],
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add, size: 14, color: Colors.white),
+                    SizedBox(width: 3),
+                    Text('오늘 1끼 식단에 10g 추가', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Colors.white)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 주간 스트립 캘린더 카드 (ui_redesign_preview.html 스타일 100% 구현)
+  Widget _buildWeeklyStripCalendar() {
+    final monday = DateTime(_focusedDate.year, _focusedDate.month, _focusedDate.day).subtract(Duration(days: _focusedDate.weekday - 1));
+    final weekDays = List.generate(7, (i) => monday.add(Duration(days: i)));
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    final firstDayOfMonth = DateTime(_focusedDate.year, _focusedDate.month, 1);
+    final weekNumber = ((_focusedDate.day + firstDayOfMonth.weekday - 2) ~/ 7) + 1;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        boxShadow: const [
+          BoxShadow(color: Color(0x06000000), blurRadius: 6, offset: Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  InkWell(
+                    onTap: () => setState(() => _focusedDate = _focusedDate.subtract(const Duration(days: 7))),
+                    borderRadius: BorderRadius.circular(8),
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(Icons.chevron_left, size: 20, color: Color(0xFF64748B)),
+                    ),
+                  ),
+                  Text(
+                    '${_focusedDate.year}년 ${_focusedDate.month}월 ${weekNumber}주차',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
+                  ),
+                  InkWell(
+                    onTap: () => setState(() => _focusedDate = _focusedDate.add(const Duration(days: 7))),
+                    borderRadius: BorderRadius.circular(8),
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(Icons.chevron_right, size: 20, color: Color(0xFF64748B)),
+                    ),
+                  ),
+                ],
+              ),
+              InkWell(
+                onTap: () {
+                  setState(() {
+                    _focusedDate = today;
+                    _selectedDate = today;
+                  });
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: appLightAccentColor,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: appPrimaryColor.withOpacity(0.4)),
+                  ),
+                  child: Text(
+                    '오늘',
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: appTextColor),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: weekDays.map((d) {
+              final isSelected = _isSameDay(d, _selectedDate);
+              final isToday = _isSameDay(d, today);
+              final hasMeal = widget.mealLogs.any((l) => _isSameDay(l.time, d));
+              final weekdayName = _getKoreanWeekday(d);
+
+              Color dayTextColor;
+              if (isSelected) {
+                dayTextColor = Colors.white;
+              } else if (d.weekday == 7) {
+                dayTextColor = const Color(0xFFEF4444);
+              } else if (d.weekday == 6) {
+                dayTextColor = const Color(0xFF3B82F6);
+              } else {
+                dayTextColor = const Color(0xFF475569);
+              }
+
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () => setState(() => _selectedDate = d),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isSelected ? appPrimaryColor : Colors.transparent,
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: isSelected
+                          ? [BoxShadow(color: appPrimaryColor.withOpacity(0.35), blurRadius: 4, offset: const Offset(0, 2))]
+                          : null,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          weekdayName,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: isSelected ? Colors.white.withOpacity(0.9) : const Color(0xFF94A3B8),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${d.day}',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: isSelected ? FontWeight.w800 : (isToday ? FontWeight.bold : FontWeight.w600),
+                            color: dayTextColor,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Container(
+                          width: 4,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isSelected
+                                ? Colors.white
+                                : (hasMeal ? appPrimaryColor : Colors.transparent),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 개별 식단 카드 (상단 첫 시도 뱃지, 그램 수, 끼니 점, 필 태그 랩핑, 하단 액션)
+  Widget _buildMealCard(MealLog l, List<String> news) {
+    final hasNew = news.isNotEmpty;
+    final timeStr = '${l.time.hour.toString().padLeft(2, '0')}:${l.time.minute.toString().padLeft(2, '0')}';
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: hasNew ? appPrimaryColor.withOpacity(0.5) : const Color(0xFFE2E8F0),
+          width: hasNew ? 1.5 : 1.0,
+        ),
+        boxShadow: const [
+          BoxShadow(color: Color(0x06000000), blurRadius: 6, offset: Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              if (hasNew)
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                      decoration: BoxDecoration(
+                        color: appPrimaryColor,
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(color: appPrimaryColor.withOpacity(0.3), blurRadius: 3, offset: const Offset(0, 1)),
+                        ],
+                      ),
+                      child: Text(
+                        '첫 시도: ${news.join(", ")}',
+                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    InkWell(
+                      onTap: _showFirstTryGuideDialog,
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        width: 18,
+                        height: 18,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(9),
+                        ),
+                        alignment: Alignment.center,
+                        child: const Text('ℹ', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
+                      ),
+                    ),
+                  ],
+                )
+              else
+                const SizedBox.shrink(),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                decoration: BoxDecoration(color: const Color(0xFFFFEE8A), borderRadius: BorderRadius.circular(4)),
-                child: const Text('영양 찰떡궁합 ✨', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF78350F))),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: appLightAccentColor,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: appPrimaryColor.withOpacity(0.3)),
+                ),
+                child: Text(
+                  '${l.totalGrams}g',
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: appTextColor),
+                ),
+              ),
+            ],
+          ),
+          if (hasNew) const SizedBox(height: 6),
+
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: l.mealType.primaryColor,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    l.mealType.label,
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '· $timeStr',
+                    style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  Text(
+                    l.isPlanned ? '식단 예정' : '식사 완료',
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: l.isPlanned ? const Color(0xFF94A3B8) : appTextColor),
+                  ),
+                  PopupMenuButton<String>(
+                    icon: const Icon(Icons.more_vert, size: 16, color: Color(0xFF94A3B8)),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onSelected: (val) {
+                      if (val == 'edit') {
+                        _showEditMealDialog(l);
+                      } else if (val == 'delete') {
+                        widget.onDeleteMeal(l);
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(value: 'edit', child: Text('수정', style: TextStyle(fontSize: 13))),
+                      const PopupMenuItem(value: 'delete', child: Text('삭제', style: TextStyle(fontSize: 13, color: Colors.red))),
+                    ],
+                  ),
+                ],
               ),
             ],
           ),
           const SizedBox(height: 6),
-          Text(
-            '${cube.name}($dText)가 아직 식단에 없어요! 오늘 1끼에 10g 쏙 넣어보세요. $synergyHint',
-            style: const TextStyle(fontSize: 12, color: Color(0xFF78350F), height: 1.3),
+
+          // 필 태그 랩핑 (식재료명, 용량)
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: l.ingredients.map((ing) {
+              final cleanName = ing.split(' ').first.replaceAll(RegExp(r'\(.*\)'), '').trim();
+              final isNew = news.contains(cleanName);
+              final emoji = getFoodEmoji(cleanName);
+
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(
+                  color: isNew ? appLightAccentColor : const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: isNew ? appPrimaryColor.withOpacity(0.4) : const Color(0xFFE2E8F0),
+                  ),
+                ),
+                child: Text(
+                  '$emoji $ing',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: isNew ? FontWeight.bold : FontWeight.w500,
+                    color: isNew ? appTextColor : const Color(0xFF334155),
+                  ),
+                ),
+              );
+            }).toList(),
           ),
           const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            height: 32,
-            child: ElevatedButton.icon(
-              onPressed: () => widget.onAddQuickRescueMeal(_selectedDate, MealType.first, cube),
-              icon: const Icon(Icons.add_circle, size: 14),
-              label: const Text('+ 오늘 1끼 식단에 10g 추가', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFF59F00),
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                padding: EdgeInsets.zero,
+
+          Container(
+            padding: const EdgeInsets.only(top: 8),
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: Color(0xFFF1F5F9))),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    l.reaction.isEmpty ? '특이사항 없음' : l.reaction,
+                    style: const TextStyle(fontSize: 10.5, color: Color(0xFF94A3B8)),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    InkWell(
+                      onTap: () => _showReactionDialog(l),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text('반응 기록', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
+                      ),
+                    ),
+                    if (l.isPlanned) ...[
+                      const SizedBox(width: 6),
+                      InkWell(
+                        onTap: () => widget.onCompleteMeal(l),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: appPrimaryColor,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text('식사 완료 기록', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white)),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 미등록 식단 슬롯 플레이스홀더 카드 (점선/연한 테두리)
+  Widget _buildEmptyMealCard(MealType mealType) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0), style: BorderStyle.solid),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Text(
+                mealType.label,
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+              ),
+              const SizedBox(width: 6),
+              const Text(
+                '· (미등록)',
+                style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+              ),
+            ],
+          ),
+          InkWell(
+            onTap: () => widget.onSwitchTab(2),
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1F5F9),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Text(
+                '+ ${mealType.label} 계획 작성',
+                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF334155)),
               ),
             ),
           ),
@@ -2167,400 +2936,110 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
     final logs = _getLogsForDate(_selectedDate);
     final dday = calculateDdayString(_selectedDate, widget.birthDate, widget.weaningStartDate);
 
-    return Scaffold(
-      backgroundColor: appBgColor,
-      body: Column(
-        children: [
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            alignment: Alignment.center,
-            child: Container(
-              width: 200,
-              padding: const EdgeInsets.all(3),
-              decoration: BoxDecoration(color: const Color(0xFFF1F3F5), borderRadius: BorderRadius.circular(8)),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: InkWell(
-                      onTap: () => setState(() => _isWeekView = true),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 5),
-                        decoration: BoxDecoration(color: _isWeekView ? Colors.white : Colors.transparent, borderRadius: BorderRadius.circular(6)),
-                        alignment: Alignment.center,
-                        child: Text('주간', style: TextStyle(fontSize: 12, fontWeight: _isWeekView ? FontWeight.bold : FontWeight.normal, color: const Color(0xFF234E42))),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: InkWell(
-                      onTap: () => setState(() => _isWeekView = false),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 5),
-                        decoration: BoxDecoration(color: !_isWeekView ? Colors.white : Colors.transparent, borderRadius: BorderRadius.circular(6)),
-                        alignment: Alignment.center,
-                        child: Text('월간', style: TextStyle(fontSize: 12, fontWeight: !_isWeekView ? FontWeight.bold : FontWeight.normal, color: const Color(0xFF234E42))),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                IconButton(icon: const Icon(Icons.chevron_left), onPressed: () => setState(() => _focusedDate = DateTime(_focusedDate.year, _focusedDate.month - 1, 1))),
-                Text('${_focusedDate.year}년 ${_focusedDate.month}월', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF234E42))),
-                IconButton(icon: const Icon(Icons.chevron_right), onPressed: () => setState(() => _focusedDate = DateTime(_focusedDate.year, _focusedDate.month + 1, 1))),
-              ],
-            ),
-          ),
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.only(bottom: 8),
-            child: _isWeekView ? _buildWeekView() : _buildMonthView(),
-          ),
-          const Divider(height: 1, thickness: 1, color: Color(0xFFEEEEEE)),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('${_selectedDate.month}월 ${_selectedDate.day}일 식단', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF234E42))),
-                    if (dday.isNotEmpty) Text(dday, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: appPrimaryColor)),
-                  ],
-                ),
-                ElevatedButton.icon(
-                  onPressed: () => widget.onSwitchTab(2),
-                  icon: const Icon(Icons.add, size: 14),
-                  label: const Text('식단 계획 추가', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: appPrimaryColor,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          _buildRescueBanner(logs),
-          Expanded(
-            child: logs.isEmpty
-                ? const Center(child: Text('등록된 식단이 없습니다.', style: TextStyle(color: Colors.grey, fontSize: 13)))
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                    itemCount: logs.length,
-                    itemBuilder: (ctx, i) {
-                      final l = logs[i];
-                      final news = _getNewIngredients(l);
-
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        color: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          side: BorderSide(
-                            color: news.isNotEmpty
-                                ? const Color(0xFFFF9800)
-                                : (l.isPlanned ? appPrimaryColor : Colors.grey.shade200),
-                            width: (l.isPlanned || news.isNotEmpty) ? 1.5 : 1.0,
-                          ),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(10),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(color: l.mealType.bgColor, borderRadius: BorderRadius.circular(4)),
-                                        child: Text(l.mealType.label, style: TextStyle(color: l.mealType.primaryColor, fontWeight: FontWeight.bold, fontSize: 11)),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text('${l.time.hour.toString().padLeft(2, '0')}:${l.time.minute.toString().padLeft(2, '0')}', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-                                      if (l.isPlanned) ...[
-                                        const SizedBox(width: 6),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                                          decoration: BoxDecoration(color: const Color(0xFFE8F8F2), borderRadius: BorderRadius.circular(4)),
-                                          child: const Text('식단 계획', style: TextStyle(fontSize: 10, color: Color(0xFF3EB489), fontWeight: FontWeight.bold)),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                  Row(
-                                    children: [
-                                      Text('${l.totalGrams}g', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                                      const SizedBox(width: 4),
-                                      PopupMenuButton<String>(
-                                        icon: const Icon(Icons.more_vert, size: 18, color: Colors.grey),
-                                        padding: EdgeInsets.zero,
-                                        constraints: const BoxConstraints(),
-                                        onSelected: (val) {
-                                          if (val == 'edit') {
-                                            _showEditMealDialog(l);
-                                          } else if (val == 'delete') {
-                                            widget.onDeleteMeal(l);
-                                          }
-                                        },
-                                        itemBuilder: (context) => [
-                                          const PopupMenuItem(value: 'edit', child: Text('수정', style: TextStyle(fontSize: 13))),
-                                          const PopupMenuItem(value: 'delete', child: Text('삭제', style: TextStyle(fontSize: 13, color: Colors.red))),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                              if (news.isNotEmpty) ...[
-                                const SizedBox(height: 4),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFFFF9DB),
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(color: const Color(0xFFFFEE8A)),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.star_rounded, size: 15, color: Color(0xFFF59F00)),
-                                      const SizedBox(width: 4),
-                                      Expanded(
-                                        child: Text(
-                                          'NEW 첫 시도: ${news.map((e) => "${getFoodEmoji(e)} $e").join(", ")}',
-                                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFB45309)),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                      InkWell(
-                                        onTap: () => showDialog(
-                                          context: context,
-                                          builder: (ctx) => AlertDialog(
-                                            title: const Row(
-                                              children: [
-                                                Icon(Icons.info_outline, color: Color(0xFFF59F00), size: 20),
-                                                SizedBox(width: 8),
-                                                Text('첫 시도 알레르기 관찰 가이드', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                                              ],
-                                            ),
-                                            content: const Text(
-                                              '새로운 식재료를 처음 먹인 날에는 식후 2~3시간 동안 아기의 반응을 주의 깊게 살펴주세요.\n\n'
-                                              '• 입 주변 붉어짐이나 피부 발진\n'
-                                              '• 눈 비빔 또는 가려움 증상\n'
-                                              '• 갑작스러운 설사나 구토\n\n'
-                                              '특이 반응 발생 시 즉시 [반응/알레르기 기록]에 남겨두시면 다음 식단 계획 시 안전하게 참고할 수 있습니다.',
-                                              style: TextStyle(fontSize: 13, height: 1.5),
-                                            ),
-                                            actions: [
-                                              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('확인')),
-                                            ],
-                                          ),
-                                        ),
-                                        child: const Padding(
-                                          padding: EdgeInsets.symmetric(horizontal: 4),
-                                          child: Icon(Icons.info_outline, size: 16, color: Color(0xFFF59F00)),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                              const SizedBox(height: 4),
-                              Text(l.ingredients.join(' + '), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                              if (l.reaction.isNotEmpty) ...[
-                                const SizedBox(height: 4),
-                                Text(l.reaction, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                              ],
-                              const SizedBox(height: 6),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: OutlinedButton(
-                                      style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact, padding: EdgeInsets.zero),
-                                      onPressed: () => _showReactionDialog(l),
-                                      child: const Text('반응/알레르기 기록', style: TextStyle(fontSize: 11)),
-                                    ),
-                                  ),
-                                  if (l.isPlanned) ...[
-                                    const SizedBox(width: 6),
-                                    Expanded(
-                                      child: ElevatedButton(
-                                        style: ElevatedButton.styleFrom(backgroundColor: appPrimaryColor, foregroundColor: Colors.white, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero),
-                                        onPressed: () => widget.onCompleteMeal(l),
-                                        child: const Text('식사 완료 (차감)', style: TextStyle(fontSize: 11)),
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showReactionDialog(MealLog log) {
-    final ctrl = TextEditingController(text: log.reaction);
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('반응 및 알레르기 기록', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Wrap(
-              spacing: 4,
-              children: [..._skinTags, ..._stoolTags, ..._attitudeTags].map((t) => ActionChip(
-                label: Text(t, style: const TextStyle(fontSize: 11)),
-                onPressed: () => ctrl.text = ctrl.text.isEmpty ? t : '${ctrl.text}, $t',
-              )).toList(),
-            ),
-            const SizedBox(height: 8),
-            TextField(controller: ctrl, decoration: const InputDecoration(labelText: '메모')),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
-          ElevatedButton(
-            onPressed: () {
-              widget.onUpdateReaction(log, ctrl.text.trim());
-              Navigator.pop(ctx);
-            },
-            child: const Text('저장'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildWeekView() {
-    final offset = _focusedDate.weekday % 7;
-    final start = _focusedDate.subtract(Duration(days: offset));
-    final days = List.generate(7, (i) => start.add(Duration(days: i)));
-    final now = DateTime.now();
-
-    return Row(
-      children: days.map((d) {
-        final isSel = _isSameDay(d, _selectedDate);
-        final isToday = _isSameDay(d, now);
-
-        return Expanded(
-          child: InkWell(
-            onTap: () => setState(() => _selectedDate = d),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              decoration: BoxDecoration(
-                color: isSel ? const Color(0xFF3EB489) : Colors.transparent,
-                borderRadius: BorderRadius.circular(8),
-                border: (!isSel && isToday) ? Border.all(color: const Color(0xFF3EB489), width: 1.5) : null,
-              ),
-              child: Column(
-                children: [
-                  Text(
-                    '${d.day}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: (isSel || isToday) ? FontWeight.bold : FontWeight.normal,
-                      color: isSel ? Colors.white : (isToday ? appPrimaryColor : Colors.black87),
-                    ),
-                  ),
-                  if (_getLogsForDate(d).isNotEmpty)
-                    Container(
-                      margin: const EdgeInsets.only(top: 2),
-                      width: 4,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: isSel ? Colors.white : const Color(0xFF3EB489),
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildMonthView() {
-    final firstDay = DateTime(_focusedDate.year, _focusedDate.month, 1).weekday % 7;
-    final totalDays = DateTime(_focusedDate.year, _focusedDate.month + 1, 0).day;
-    final rows = ((firstDay + totalDays) / 7).ceil();
-    final now = DateTime.now();
+    // Check which meal types are registered for this day
+    final registeredTypes = logs.map((l) => l.mealType).toSet();
+    final missingTypes = [MealType.first, MealType.second, MealType.snack].where((m) => !registeredTypes.contains(m)).toList();
 
     return Column(
-      children: List.generate(rows, (r) {
-        return Row(
-          children: List.generate(7, (c) {
-            final idx = r * 7 + c;
-            final day = idx - firstDay + 1;
-            if (day < 1 || day > totalDays) return const Expanded(child: SizedBox(height: 34));
-            final d = DateTime(_focusedDate.year, _focusedDate.month, day);
-            final isSel = _isSameDay(d, _selectedDate);
-            final isToday = _isSameDay(d, now);
+      children: [
+        const SizedBox(height: 4),
+        // 1. 큐브 추가 제안 배너 (기한 임박 큐브 발생 시 부드러운 앰버로 안내)
+        _buildRescueBanner(logs),
 
-            return Expanded(
-              child: InkWell(
-                onTap: () => setState(() => _selectedDate = d),
-                child: Container(
-                  height: 34,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: isSel ? const Color(0xFF3EB489) : Colors.transparent,
-                    shape: BoxShape.circle,
-                    border: (!isSel && isToday) ? Border.all(color: const Color(0xFF3EB489), width: 1.5) : null,
+        // 2. 주간 스트립 캘린더
+        _buildWeeklyStripCalendar(),
+
+        // 3. 식단 목록 헤더 (날짜 + 식단 계획 추가 버튼)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${_selectedDate.month}월 ${_selectedDate.day}일 (${_getKoreanWeekday(_selectedDate)}) 식단',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Color(0xFF0F172A)),
                   ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  if (dday.isNotEmpty)
+                    Text(
+                      dday,
+                      style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: appTextColor),
+                    ),
+                ],
+              ),
+              InkWell(
+                onTap: () => widget.onSwitchTab(2),
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: appPrimaryColor,
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(color: appPrimaryColor.withOpacity(0.3), blurRadius: 3, offset: const Offset(0, 1)),
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        '$day',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: (isSel || isToday) ? FontWeight.bold : FontWeight.normal,
-                          color: isSel ? Colors.white : (isToday ? appPrimaryColor : Colors.black87),
-                        ),
-                      ),
-                      if (_getLogsForDate(d).isNotEmpty)
-                        Container(
-                          margin: const EdgeInsets.only(top: 1),
-                          width: 3,
-                          height: 3,
-                          decoration: BoxDecoration(
-                            color: isSel ? Colors.white : const Color(0xFF3EB489),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
+                      Icon(Icons.add, size: 13, color: Colors.white),
+                      SizedBox(width: 3),
+                      Text('식단 계획 추가', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white)),
                     ],
                   ),
                 ),
               ),
-            );
-          }),
-        );
-      }),
+            ],
+          ),
+        ),
+
+        // 4. 식단 카드 리스트
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.only(top: 4, bottom: 16),
+            children: [
+              ...logs.map((l) => _buildMealCard(l, _getNewIngredients(l))),
+              if (missingTypes.isNotEmpty && logs.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                _buildEmptyMealCard(missingTypes.first),
+              ],
+              if (logs.isEmpty)
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                  ),
+                  alignment: Alignment.center,
+                  child: Column(
+                    children: [
+                      const Text('🥣', style: TextStyle(fontSize: 28)),
+                      const SizedBox(height: 8),
+                      const Text('등록된 식단이 없습니다.', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
+                      const SizedBox(height: 4),
+                      const Text('아기를 위한 새로운 토핑 식단을 계획해 보세요.', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+                      const SizedBox(height: 12),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: appPrimaryColor,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () => widget.onSwitchTab(2),
+                        child: const Text('식단 계획 작성하기', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -2650,97 +3129,107 @@ class _CubeStorageHubTabState extends State<CubeStorageHubTab> {
     final neededCount = _computeNeededCount();
     final ownedCount = widget.cubes.where((c) => !c.isPlannedOnly && c.quantity > 0).length;
 
-    return Scaffold(
-      backgroundColor: appBgColor,
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(48),
-        child: Container(
-          color: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          child: Container(
-            height: 36,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F3F5),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            padding: const EdgeInsets.all(2),
-            child: Row(
-              children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: () => setState(() => _subTabIndex = 0),
-                    borderRadius: BorderRadius.circular(6),
-                    child: Container(
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: _subTabIndex == 0 ? Colors.white : Colors.transparent,
-                        borderRadius: BorderRadius.circular(6),
-                        boxShadow: _subTabIndex == 0 ? [const BoxShadow(color: Colors.black12, blurRadius: 2, offset: Offset(0, 1))] : null,
-                      ),
-                      child: Text(
-                        '보관함 ($ownedCount)',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: _subTabIndex == 0 ? FontWeight.bold : FontWeight.w500,
-                          color: _subTabIndex == 0 ? appTextColor : Colors.grey.shade600,
+    return Column(
+      children: [
+        // Clean Sub-Tab Segmented Control (보관함 / 제작 필요 - ui_redesign_preview.html)
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  onTap: () => setState(() => _subTabIndex = 0),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: _subTabIndex == 0 ? Colors.white : Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: _subTabIndex == 0 ? [const BoxShadow(color: Color(0x0C000000), blurRadius: 4, offset: Offset(0, 1))] : null,
+                    ),
+                    alignment: Alignment.center,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text('보관함', style: TextStyle(fontSize: 12, fontWeight: _subTabIndex == 0 ? FontWeight.bold : FontWeight.w600, color: _subTabIndex == 0 ? const Color(0xFF0F172A) : const Color(0xFF64748B))),
+                        const SizedBox(width: 5),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(10)),
+                          child: Text('$ownedCount', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
                         ),
-                      ),
+                      ],
                     ),
                   ),
                 ),
-                Expanded(
-                  child: InkWell(
-                    onTap: () => setState(() => _subTabIndex = 1),
-                    borderRadius: BorderRadius.circular(6),
-                    child: Container(
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: _subTabIndex == 1 ? Colors.white : Colors.transparent,
-                        borderRadius: BorderRadius.circular(6),
-                        boxShadow: _subTabIndex == 1 ? [const BoxShadow(color: Colors.black12, blurRadius: 2, offset: Offset(0, 1))] : null,
-                      ),
-                      child: Text(
-                        '제작 필요 ($neededCount)',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: _subTabIndex == 1 ? FontWeight.bold : FontWeight.w500,
-                          color: _subTabIndex == 1 ? const Color(0xFFE53935) : Colors.grey.shade600,
-                        ),
-                      ),
+              ),
+              Expanded(
+                child: InkWell(
+                  onTap: () => setState(() => _subTabIndex = 1),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: _subTabIndex == 1 ? Colors.white : Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: _subTabIndex == 1 ? [const BoxShadow(color: Color(0x0C000000), blurRadius: 4, offset: Offset(0, 1))] : null,
+                    ),
+                    alignment: Alignment.center,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text('제작 필요', style: TextStyle(fontSize: 12, fontWeight: _subTabIndex == 1 ? FontWeight.bold : FontWeight.w600, color: _subTabIndex == 1 ? const Color(0xFF0F172A) : const Color(0xFF64748B))),
+                        if (neededCount > 0) ...[
+                          const SizedBox(width: 5),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                            decoration: BoxDecoration(color: appPrimaryColor, borderRadius: BorderRadius.circular(10)),
+                            child: Text('$neededCount', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white)),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
-      ),
-      body: IndexedStack(
-        index: _subTabIndex,
-        children: [
-          CubeStockTab(
-            cubes: widget.cubes,
-            mealLogs: widget.mealLogs,
-            neededCount: neededCount,
-            onGoToNeeded: () => setState(() => _subTabIndex = 1),
-            onUpdateQty: widget.onUpdateQty,
-            onAddCube: widget.onAddCube,
-            onEditCube: widget.onEditCube,
-            onDiscardCube: widget.onDiscardCube,
-            onDeleteCube: widget.onDeleteCube,
+        Expanded(
+          child: IndexedStack(
+            index: _subTabIndex,
+            children: [
+              CubeStockTab(
+                cubes: widget.cubes,
+                mealLogs: widget.mealLogs,
+                neededCount: neededCount,
+                onGoToNeeded: () => setState(() => _subTabIndex = 1),
+                onUpdateQty: widget.onUpdateQty,
+                onAddCube: widget.onAddCube,
+                onEditCube: widget.onEditCube,
+                onDiscardCube: widget.onDiscardCube,
+                onDeleteCube: widget.onDeleteCube,
+              ),
+              RestockPlanTab(
+                cubes: widget.cubes,
+                mealLogs: widget.mealLogs,
+                triedIngredients: widget.triedIngredients,
+                onRestock: widget.onRestock,
+              ),
+            ],
           ),
-          RestockPlanTab(
-            cubes: widget.cubes,
-            mealLogs: widget.mealLogs,
-            triedIngredients: widget.triedIngredients,
-            onRestock: widget.onRestock,
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
+// 2열 트레이 그리드 보관함 뷰 (CubeStockTab)
 class CubeStockTab extends StatefulWidget {
   final List<CubeItem> cubes;
   final List<MealLog> mealLogs;
@@ -2785,6 +3274,7 @@ class _CubeStockTabState extends State<CubeStockTab> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: const Text('새 큐브 등록', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           content: SingleChildScrollView(
             child: Column(
@@ -2815,7 +3305,7 @@ class _CubeStockTabState extends State<CubeStockTab> {
                         label: Text(opt, style: TextStyle(fontSize: 11, fontWeight: isSel ? FontWeight.bold : FontWeight.normal, color: isSel ? Colors.white : Colors.black87)),
                         selected: isSel,
                         selectedColor: appPrimaryColor,
-                        backgroundColor: const Color(0xFFF1F3F5),
+                        backgroundColor: const Color(0xFFF1F5F9),
                         showCheckmark: false,
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
                         onSelected: (val) => setDState(() => selectedSubOption = val ? opt : ''),
@@ -2835,7 +3325,7 @@ class _CubeStockTabState extends State<CubeStockTab> {
                         label: Text(opt, style: TextStyle(fontSize: 11, fontWeight: isSel ? FontWeight.bold : FontWeight.normal, color: isSel ? Colors.white : Colors.black87)),
                         selected: isSel,
                         selectedColor: appPrimaryColor,
-                        backgroundColor: const Color(0xFFF1F3F5),
+                        backgroundColor: const Color(0xFFF1F5F9),
                         showCheckmark: false,
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
                         onSelected: (val) => setDState(() => selectedSubOption = val ? opt : ''),
@@ -2848,7 +3338,7 @@ class _CubeStockTabState extends State<CubeStockTab> {
                   children: [
                     Expanded(child: TextField(controller: weightCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '1개 용량 (g)'))),
                     const SizedBox(width: 8),
-                    Expanded(child: TextField(controller: qtyCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '제작 개수'))),
+                    Expanded(child: TextField(controller: qtyCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '만든 개수'))),
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -2869,9 +3359,9 @@ class _CubeStockTabState extends State<CubeStockTab> {
                     Text('제조일: ${mDate.month}.${mDate.day}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                     TextButton.icon(
                       icon: const Icon(Icons.calendar_today, size: 14),
-                      label: const Text('날짜 선택'),
+                      label: const Text('날짜 변경'),
                       onPressed: () async {
-                        final p = await showDatePicker(context: context, initialDate: mDate, firstDate: DateTime.now().subtract(const Duration(days: 30)), lastDate: DateTime.now());
+                        final p = await showDatePicker(context: context, initialDate: mDate, firstDate: DateTime.now().subtract(const Duration(days: 60)), lastDate: DateTime.now());
                         if (p != null) setDState(() => mDate = p);
                       },
                     ),
@@ -2895,10 +3385,11 @@ class _CubeStockTabState extends State<CubeStockTab> {
                   madeDate: mDate,
                   expireDate: mDate.add(Duration(days: shelfDays)),
                   subOption: selectedSubOption,
+                  isPlannedOnly: false,
                 ));
                 Navigator.pop(ctx);
               },
-              child: const Text('저장'),
+              child: const Text('등록'),
             ),
           ],
         ),
@@ -2913,14 +3404,16 @@ class _CubeStockTabState extends State<CubeStockTab> {
     FoodCategory cat = c.category;
     DateTime mDate = c.madeDate;
     int shelfDays = c.expireDate.difference(c.madeDate).inDays;
-    if (![3, 7, 14].contains(shelfDays)) shelfDays = 14;
+    if (shelfDays < 3) shelfDays = 3;
+    if (shelfDays != 3 && shelfDays != 7 && shelfDays != 14) shelfDays = 14;
     String selectedSubOption = c.subOption;
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDState) => AlertDialog(
-          title: Text('${c.name} 큐브 정보 수정', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text('${c.name} 큐브 수정', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -2931,7 +3424,7 @@ class _CubeStockTabState extends State<CubeStockTab> {
                 DropdownButtonFormField<FoodCategory>(
                   value: cat,
                   decoration: const InputDecoration(labelText: '카테고리'),
-                  items: FoodCategory.values.map((catItem) => DropdownMenuItem(value: catItem, child: Text(catItem.label))).toList(),
+                  items: FoodCategory.values.map((c) => DropdownMenuItem(value: c, child: Text(c.label))).toList(),
                   onChanged: (v) => setDState(() {
                     cat = v!;
                     selectedSubOption = '';
@@ -2950,7 +3443,7 @@ class _CubeStockTabState extends State<CubeStockTab> {
                         label: Text(opt, style: TextStyle(fontSize: 11, fontWeight: isSel ? FontWeight.bold : FontWeight.normal, color: isSel ? Colors.white : Colors.black87)),
                         selected: isSel,
                         selectedColor: appPrimaryColor,
-                        backgroundColor: const Color(0xFFF1F3F5),
+                        backgroundColor: const Color(0xFFF1F5F9),
                         showCheckmark: false,
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
                         onSelected: (val) => setDState(() => selectedSubOption = val ? opt : ''),
@@ -2970,7 +3463,7 @@ class _CubeStockTabState extends State<CubeStockTab> {
                         label: Text(opt, style: TextStyle(fontSize: 11, fontWeight: isSel ? FontWeight.bold : FontWeight.normal, color: isSel ? Colors.white : Colors.black87)),
                         selected: isSel,
                         selectedColor: appPrimaryColor,
-                        backgroundColor: const Color(0xFFF1F3F5),
+                        backgroundColor: const Color(0xFFF1F5F9),
                         showCheckmark: false,
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
                         onSelected: (val) => setDState(() => selectedSubOption = val ? opt : ''),
@@ -3032,25 +3525,327 @@ class _CubeStockTabState extends State<CubeStockTab> {
     );
   }
 
+  void _showCubeOptionDialog(CubeItem c) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(color: const Color(0xFFCBD5E1), borderRadius: BorderRadius.circular(2)),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Text(getFoodEmoji(c.name), style: const TextStyle(fontSize: 22)),
+                  const SizedBox(width: 8),
+                  Text('${c.displayName} 관리', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                leading: const Icon(Icons.edit_outlined, color: Color(0xFF475569)),
+                title: const Text('정보 수정', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                subtitle: const Text('수량, 용량, 배죽/부위 옵션 수정', style: TextStyle(fontSize: 11)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showEditDialog(c);
+                },
+              ),
+              if (c.quantity > 0 && !c.isPlannedOnly)
+                ListTile(
+                  leading: const Icon(Icons.delete_sweep_outlined, color: Color(0xFFE53935)),
+                  title: const Text('기한만료 폐기 (재고 0개 처리)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFFE53935))),
+                  subtitle: const Text('재고를 0으로 만들고 [제작 필요]로 자동 연동', style: TextStyle(fontSize: 11)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    widget.onDiscardCube(c);
+                  },
+                ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: const Text('보관함에서 완전히 삭제', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.red)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  widget.onDeleteCube(c);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 2열 트레이 그리드 카드 빌더 (ui_redesign_preview.html)
+  Widget _buildCubeGridCard(CubeItem c) {
+    final isUnownedOrDiscarded = c.isPlannedOnly || c.quantity == 0;
+    final isExpiring = !isUnownedOrDiscarded && c.daysRemaining >= 0 && c.daysRemaining <= 2;
+    final emoji = getFoodEmoji(c.name);
+
+    final totalDots = (c.quantity > 6) ? c.quantity : 6;
+    final filledDots = c.quantity.clamp(0, totalDots);
+
+    return InkWell(
+      onTap: () => _showCubeOptionDialog(c),
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: isExpiring ? const Color(0xFFFFF5F5) : Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: isExpiring
+                ? const Color(0xFFFCA5A5)
+                : const Color(0xFFE2E8F0),
+            width: isExpiring ? 2.0 : 1.0,
+          ),
+          boxShadow: const [
+            BoxShadow(color: Color(0x06000000), blurRadius: 4, offset: Offset(0, 1)),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Text(emoji, style: const TextStyle(fontSize: 16)),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              c.name,
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w800,
+                                color: isExpiring ? const Color(0xFF7F1D1D) : const Color(0xFF0F172A),
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (isExpiring)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEE2E2),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFFFECACA)),
+                        ),
+                        child: Text(
+                          '● ${c.dDayText} 임박',
+                          style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFFDC2626)),
+                        ),
+                      )
+                    else if (c.subOption.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                        decoration: BoxDecoration(
+                          color: appLightAccentColor,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: appPrimaryColor.withOpacity(0.3)),
+                        ),
+                        child: Text(
+                          c.subOption,
+                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: appTextColor),
+                        ),
+                      )
+                    else
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          c.category.label,
+                          style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  isUnownedOrDiscarded
+                      ? '${c.unitWeight}g · 재고 없음'
+                      : (isExpiring ? '${c.unitWeight}g · 식단 미배정' : '${c.unitWeight}g · ${c.dDayText}'),
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: isExpiring ? const Color(0xFFDC2626).withOpacity(0.85) : const Color(0xFF94A3B8),
+                    fontWeight: isExpiring ? FontWeight.w700 : FontWeight.normal,
+                  ),
+                ),
+              ],
+            ),
+
+            // 트레이 시각화 도트 (사각 큐브 트레이 형태)
+            Row(
+              children: List.generate(totalDots > 8 ? 8 : totalDots, (idx) {
+                final isFilled = idx < filledDots;
+                return Container(
+                  width: 10,
+                  height: 10,
+                  margin: const EdgeInsets.only(right: 3),
+                  decoration: BoxDecoration(
+                    color: isFilled
+                        ? (isExpiring ? const Color(0xFFEF4444) : appPrimaryColor)
+                        : const Color(0xFFE2E8F0),
+                    borderRadius: BorderRadius.circular(2.5),
+                  ),
+                );
+              }),
+            ),
+
+            // 하단: 수량 표시 및 증감 스텝퍼
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '${c.quantity}개 (${c.quantity * c.unitWeight}g)',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: isExpiring ? const Color(0xFF991B1B) : const Color(0xFF0F172A),
+                  ),
+                ),
+                if (isExpiring)
+                  InkWell(
+                    onTap: () => _showCubeOptionDialog(c),
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEF4444),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text('식단 추가', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white)),
+                    ),
+                  )
+                else if (isUnownedOrDiscarded)
+                  InkWell(
+                    onTap: () => _showEditDialog(c),
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text('관리', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
+                    ),
+                  )
+                else
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      InkWell(
+                        onTap: () => widget.onUpdateQty(c, -1),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          width: 22,
+                          height: 22,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          alignment: Alignment.center,
+                          child: const Text('-', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      InkWell(
+                        onTap: () => widget.onUpdateQty(c, 1),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          width: 22,
+                          height: 22,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          alignment: Alignment.center,
+                          child: const Text('+', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // + 새 큐브 추가 카드 (점선 그리드 아이템)
+  Widget _buildAddCubeGridCard() {
+    return InkWell(
+      onTap: _showAddDialog,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFCBD5E1), style: BorderStyle.solid, width: 1.5),
+        ),
+        alignment: Alignment.center,
+        child: const Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text('+ 새 큐브', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF334155))),
+            SizedBox(height: 2),
+            Text('배죽/부위 옵션', style: TextStyle(fontSize: 9.5, color: Color(0xFF94A3B8))),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCatFilterChip(FoodCategory? cat, String label) {
+    final isSel = _selCat == cat;
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: InkWell(
+        onTap: () => setState(() => _selCat = cat),
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: isSel ? appPrimaryColor : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: isSel ? appPrimaryColor : const Color(0xFFE2E8F0)),
+            boxShadow: isSel ? [BoxShadow(color: appPrimaryColor.withOpacity(0.3), blurRadius: 4, offset: const Offset(0, 1))] : null,
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+              color: isSel ? Colors.white : const Color(0xFF475569),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-
-    final futureLogs = widget.mealLogs.where((l) {
-      final d = DateTime(l.time.year, l.time.month, l.time.day);
-      return d.isAfter(today) || d.isAtSameMomentAs(today);
-    }).toList()..sort((a, b) => a.time.compareTo(b.time));
-
-    DateTime getFirstNeedDate(CubeItem cube) {
-      for (var l in futureLogs) {
-        if (l.cubeUsage.containsKey(cube.id) || l.ingredients.any((ing) => ing.contains(cube.name))) {
-          return l.time;
-        }
-      }
-      return DateTime(2099, 12, 31);
-    }
-
     final filtered = _selCat == null ? List<CubeItem>.from(widget.cubes) : widget.cubes.where((c) => c.category == _selCat).toList();
 
     filtered.sort((a, b) {
@@ -3060,220 +3855,106 @@ class _CubeStockTabState extends State<CubeStockTab> {
       if (aHasStock && !bHasStock) return -1;
       if (!aHasStock && bHasStock) return 1;
 
-      if (aHasStock && bHasStock) {
-        return a.madeDate.compareTo(b.madeDate);
-      } else {
-        final dateA = getFirstNeedDate(a);
-        final dateB = getFirstNeedDate(b);
-        final cmp = dateA.compareTo(dateB);
-        return cmp != 0 ? cmp : a.createdAt.compareTo(b.createdAt);
-      }
+      return a.madeDate.compareTo(b.madeDate);
     });
 
-    return Scaffold(
-      backgroundColor: appBgColor,
-      body: Column(
-        children: [
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: SizedBox(
-              height: 38,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                children: [
-                  InkWell(
-                    onTap: () => setState(() => _selCat = null),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                      decoration: BoxDecoration(
-                        color: _selCat == null ? appLightAccentColor : Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: _selCat == null ? appPrimaryColor : Colors.grey.shade300),
-                      ),
-                      child: Text('전체', style: TextStyle(fontSize: 12, fontWeight: _selCat == null ? FontWeight.bold : FontWeight.normal, color: _selCat == null ? appTextColor : Colors.black87)),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  ...FoodCategory.values.map((cat) => Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: InkWell(
-                      onTap: () => setState(() => _selCat = _selCat == cat ? null : cat),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                        decoration: BoxDecoration(
-                          color: _selCat == cat ? appLightAccentColor : Colors.white,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: _selCat == cat ? appPrimaryColor : Colors.grey.shade300),
-                        ),
-                        child: Text(cat.label, style: TextStyle(fontSize: 12, fontWeight: _selCat == cat ? FontWeight.bold : FontWeight.normal, color: _selCat == cat ? appTextColor : Colors.black87)),
-                      ),
-                    ),
-                  )),
-                ],
-              ),
-            ),
-          ),
-          if (widget.neededCount > 0)
-            Container(
-              margin: const EdgeInsets.fromLTRB(16, 6, 16, 2),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+    final totalOwned = widget.cubes.where((c) => !c.isPlannedOnly && c.quantity > 0).length;
+
+    return Column(
+      children: [
+        // 1. 제작 필요 큐브 존재 시 알림 배너
+        if (widget.neededCount > 0)
+          InkWell(
+            onTap: widget.onGoToNeeded,
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              margin: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: const Color(0xFFFFF0F1),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFFFCDD2)),
+                color: appLightAccentColor,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: appPrimaryColor.withOpacity(0.3)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.error_outline, color: Color(0xFFE53935), size: 18),
-                  const SizedBox(width: 8),
                   Expanded(
-                    child: Text(
-                      '${widget.neededCount}가지 큐브 제작 필요 (식단을 위해 미리 만드세요)',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFC62828)),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  InkWell(
-                    onTap: widget.onGoToNeeded,
-                    child: const Text('목록 보기 →', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFE53935))),
-                  ),
-                ],
-              ),
-            ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: SizedBox(
-              width: double.infinity,
-              height: 40,
-              child: ElevatedButton.icon(
-                onPressed: _showAddDialog,
-                icon: const Icon(Icons.add_circle_outline, size: 18),
-                label: const Text('새 큐브 등록', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: appPrimaryColor,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-              ),
-            ),
-          ),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(14),
-              itemCount: filtered.length,
-              itemBuilder: (ctx, i) {
-                final c = filtered[i];
-                final isUnownedOrDiscarded = c.isPlannedOnly || c.quantity == 0;
-                final isExpiring = !isUnownedOrDiscarded && c.daysRemaining >= 0 && c.daysRemaining <= 2;
-
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  color: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(
-                      color: isExpiring
-                          ? const Color(0xFFE53935)
-                          : (isUnownedOrDiscarded ? const Color(0xFFCE93D8) : Colors.grey.shade200),
-                      width: isExpiring ? 1.8 : 1.0,
-                    ),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                  decoration: BoxDecoration(color: c.category.bgColor, borderRadius: BorderRadius.circular(4)),
-                                  child: Text(c.category.label, style: TextStyle(color: c.category.textColor, fontSize: 10, fontWeight: FontWeight.bold)),
-                                ),
-                                const SizedBox(width: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: isExpiring ? const Color(0xFFFFEBEE) : c.statusBgColor,
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    c.dDayText,
-                                    style: TextStyle(
-                                      color: isExpiring ? const Color(0xFFE53935) : c.statusColor,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            PopupMenuButton<String>(
-                              icon: const Icon(Icons.more_vert, size: 18, color: Colors.grey),
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              onSelected: (val) {
-                                if (val == 'edit') {
-                                  _showEditDialog(c);
-                                } else if (val == 'discard') {
-                                  widget.onDiscardCube(c);
-                                } else if (val == 'delete') {
-                                  widget.onDeleteCube(c);
-                                }
-                              },
-                              itemBuilder: (context) => [
-                                const PopupMenuItem(value: 'edit', child: Text('수정', style: TextStyle(fontSize: 13))),
-                                if (c.quantity > 0 && !c.isPlannedOnly)
-                                  const PopupMenuItem(value: 'discard', child: Text('기한만료 폐기 (재고 0)', style: TextStyle(fontSize: 13, color: Colors.orange))),
-                                const PopupMenuItem(value: 'delete', child: Text('목록에서 삭제', style: TextStyle(fontSize: 13, color: Colors.red))),
-                              ],
-                            ),
-                          ],
+                        Text(
+                          '${widget.neededCount}가지 큐브 제작 필요',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: appTextColor),
                         ),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            Text(getFoodEmoji(c.name), style: const TextStyle(fontSize: 22)),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(c.displayName, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-                                  if (!isUnownedOrDiscarded)
-                                    Text('개당 ${c.unitWeight}g · ${c.quantity}개 남음 (제조: ${c.madeDate.month}.${c.madeDate.day})', style: const TextStyle(fontSize: 11, color: Colors.grey))
-                                  else
-                                    Text('1회 권장량 ${c.unitWeight}g', style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                                ],
-                              ),
-                            ),
-                            IconButton(icon: const Icon(Icons.remove, size: 18), onPressed: c.quantity > 0 ? () => widget.onUpdateQty(c, -1) : null),
-                            Text('${c.quantity}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                            IconButton(icon: const Icon(Icons.add, size: 18), onPressed: () => widget.onUpdateQty(c, 1)),
-                          ],
+                        const SizedBox(height: 1),
+                        Text(
+                          '내일/모레 식단을 위해 미리 만들어두세요.',
+                          style: TextStyle(fontSize: 10, color: appTextColor.withOpacity(0.8)),
                         ),
                       ],
                     ),
                   ),
-                );
-              },
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: appPrimaryColor.withOpacity(0.4)),
+                    ),
+                    child: Text(
+                      '목록 보기 →',
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: appTextColor),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ],
-      ),
+
+        // 2. 카테고리 필터 칩 (이모지 없이 미니멀한 텍스트 칩 - ui_redesign_preview.html)
+        Container(
+          height: 34,
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            children: [
+              _buildCatFilterChip(null, '전체 ($totalOwned)'),
+              _buildCatFilterChip(FoodCategory.grain, '곡류'),
+              _buildCatFilterChip(FoodCategory.meat, '육류'),
+              _buildCatFilterChip(FoodCategory.vegetable, '채소'),
+              _buildCatFilterChip(FoodCategory.fruit, '과일'),
+              _buildCatFilterChip(FoodCategory.etc, '기타'),
+            ],
+          ),
+        ),
+
+        // 3. 2열 트레이 그리드 뷰 (2-Column Storage Grid)
+        Expanded(
+          child: GridView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              childAspectRatio: 0.90,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+            ),
+            itemCount: filtered.length + 1,
+            itemBuilder: (ctx, i) {
+              if (i == filtered.length) {
+                return _buildAddCubeGridCard();
+              }
+              final c = filtered[i];
+              return _buildCubeGridCard(c);
+            },
+          ),
+        ),
+      ],
     );
   }
 }
 
 // ==========================================
-// 4. 제작 필요 화면 (보관함 삭제 여부와 무관하게 미래 식단 전체를 스캔하여 11월 28일 자동 감지!)
+// 4. 제작 필요 화면 (RestockPlanTab)
 // ==========================================
 enum RestockFilter { all, owned, unowned }
 
@@ -3283,7 +3964,13 @@ class RestockPlanTab extends StatefulWidget {
   final List<TriedIngredient> triedIngredients;
   final Function(CubeItem, int, int, DateTime, int) onRestock;
 
-  const RestockPlanTab({super.key, required this.cubes, required this.mealLogs, required this.triedIngredients, required this.onRestock});
+  const RestockPlanTab({
+    super.key,
+    required this.cubes,
+    required this.mealLogs,
+    required this.triedIngredients,
+    required this.onRestock,
+  });
 
   @override
   State<RestockPlanTab> createState() => _RestockPlanTabState();
@@ -3302,7 +3989,8 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDState) => AlertDialog(
-          title: Text('${c.name} 제작 완료 등록', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text('${c.displayName} 제작 완료 등록', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -3364,13 +4052,48 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
     );
   }
 
+  void _simulateBatchRestock(List<_PlanDisplayItem> items) {
+    for (var item in items) {
+      widget.onRestock(item.cube, item.cube.unitWeight, 6, DateTime.now(), 14);
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('🎉 총 ${items.length}가지 큐브가 보관함에 6개씩 일괄 등록되었습니다!'),
+        backgroundColor: appPrimaryColor,
+      ),
+    );
+  }
+
+  Widget _buildFilterButton(String label, RestockFilter filter) {
+    final isSel = _filter == filter;
+    return InkWell(
+      onTap: () => setState(() => _filter = filter),
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSel ? appPrimaryColor : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: isSel ? appPrimaryColor : const Color(0xFFE2E8F0)),
+          boxShadow: isSel ? [BoxShadow(color: appPrimaryColor.withOpacity(0.3), blurRadius: 4, offset: const Offset(0, 1))] : null,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+            color: isSel ? Colors.white : const Color(0xFF475569),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
 
-    // 1) 오늘 포함 미래 식단 로그 목록 (날짜순 정렬)
-    // 단, 오늘 식단 중 이미 '식사 완료'된 건(isPlanned == false)은 제외하고 '앞으로 먹일 식단'만 대상으로 삼음
     final upcomingLogs = widget.mealLogs.where((l) {
       final logDay = DateTime(l.time.year, l.time.month, l.time.day);
       final isFutureDay = logDay.isAfter(today);
@@ -3381,7 +4104,6 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
     List<_PlanDisplayItem> items = [];
     Set<String> processedNames = {};
 
-    // 2) 현재 보관함(_cubes)에 등록된 항목 점검
     for (var cube in widget.cubes) {
       processedNames.add(cube.name);
 
@@ -3394,15 +4116,14 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
         }
       }
 
-      // 2-1. 미보유 신규 큐브
       if (cube.isPlannedOnly) {
         final targetDate = matchedLogs.isNotEmpty ? matchedLogs.first.time : null;
         final dl = targetDate != null ? '${targetDate.month}월 ${targetDate.day}일' : '식단 전';
         items.add(_PlanDisplayItem(
           cube: cube,
-          urgency: null,
+          urgency: '신규 필요',
           deadline: dl,
-          color: const Color(0xFF8E24AA),
+          color: appPrimaryColor,
           score: targetDate != null ? targetDate.difference(today).inDays : 999,
           isUnowned: true,
         ));
@@ -3412,25 +4133,23 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
       final curQty = cube.quantity;
       final isExpired = cube.daysRemaining < 0;
 
-      // 2-2. 폐기되었거나 재고가 0개인 경우 -> 11월 28일 식단이 있으면 그 날짜를 마감일로 자동 계산!
       if (curQty == 0) {
         final nextUse = matchedLogs.isNotEmpty ? matchedLogs.first.time : null;
-        final dl = nextUse != null ? '${nextUse.month}월 ${nextUse.day}일' : '식단 예정 없음 (필요 시 제작)';
+        final dl = nextUse != null ? '${nextUse.month}월 ${nextUse.day}일' : '식단 예정 없음';
         items.add(_PlanDisplayItem(
           cube: cube,
-          urgency: '재고 소진/폐기됨',
+          urgency: '재고 소진',
           deadline: dl,
           color: const Color(0xFFE53935),
           score: nextUse != null ? nextUse.difference(today).inDays : 900,
-          isUnowned: true, // 실물 재고가 없으므로 '미보유' 필터에서 함께 조회 가능
+          isUnowned: true,
         ));
         continue;
       }
 
-      // 2-3. 소비기한 만료 (아직 폐기 전)
       if (isExpired) {
         final nextUse = matchedLogs.isNotEmpty ? matchedLogs.first.time : null;
-        final dl = nextUse != null ? '${nextUse.month}월 ${nextUse.day}일 (식단 전)' : '폐기 후 신규 제작';
+        final dl = nextUse != null ? '${nextUse.month}월 ${nextUse.day}일' : '소비기한 만료';
         items.add(_PlanDisplayItem(
           cube: cube,
           urgency: '소비기한 만료',
@@ -3442,7 +4161,6 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
         continue;
       }
 
-      // 2-4. 재고 1~3개 남은 보유 큐브
       if (curQty <= 3) {
         int simulatedQty = curQty;
         DateTime? outOfStockDate;
@@ -3471,7 +4189,6 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
       }
     }
 
-    // 3) ★ 보관함에서 완전히 삭제된 식재료라도 캘린더 11월 28일 등 미래 식단에 배정되어 있다면 자동 추출!
     for (var l in upcomingLogs) {
       for (var ingStr in l.ingredients) {
         final match = RegExp(r'^(.+?)\s+(\d+)g').firstMatch(ingStr.trim());
@@ -3503,9 +4220,9 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
 
             items.add(_PlanDisplayItem(
               cube: virtualCube,
-              urgency: '보관함 없음 (식단 예정)',
+              urgency: '식단 예정',
               deadline: '${l.time.month}월 ${l.time.day}일',
-              color: const Color(0xFF8E24AA),
+              color: appPrimaryColor,
               score: l.time.difference(today).inDays,
               isUnowned: true,
             ));
@@ -3522,113 +4239,154 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
       return true;
     }).toList();
 
-    return Scaffold(
-      backgroundColor: appBgColor,
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Filter pills
+          Row(
+            children: [
+              _buildFilterButton('전체', RestockFilter.all),
+              const SizedBox(width: 6),
+              _buildFilterButton('보유', RestockFilter.owned),
+              const SizedBox(width: 6),
+              _buildFilterButton('미보유', RestockFilter.unowned),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          // Header Box with Total Count & Batch Restock Button
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _buildFilterButton('전체', RestockFilter.all),
-                const SizedBox(width: 8),
-                _buildFilterButton('보유', RestockFilter.owned),
-                const SizedBox(width: 8),
-                _buildFilterButton('미보유', RestockFilter.unowned),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('총 ${filteredItems.length}가지 큐브 제작 필요', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5, color: Color(0xFF0F172A))),
+                    const SizedBox(height: 1),
+                    const Text('예정된 식단 일정순 자동 정렬', style: TextStyle(fontSize: 10, color: Color(0xFF64748B))),
+                  ],
+                ),
+                if (filteredItems.isNotEmpty)
+                  InkWell(
+                    onTap: () => _simulateBatchRestock(filteredItems),
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF334155),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Text('전체 일괄 등록', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white)),
+                    ),
+                  ),
               ],
             ),
-            const SizedBox(height: 14),
-            Text('제작 필요 토핑 (${filteredItems.length}개)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: appTextColor)),
-            const SizedBox(height: 10),
-            Expanded(
-              child: filteredItems.isEmpty
-                  ? const Center(child: Text('해당하는 큐브가 없습니다! 🎉', style: TextStyle(color: Colors.grey)))
-                  : ListView.builder(
-                      itemCount: filteredItems.length,
-                      itemBuilder: (ctx, i) {
-                        final item = filteredItems[i];
-                        final c = item.cube;
+          ),
+          const SizedBox(height: 10),
 
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 8),
+          // List of Restock Items (ui_redesign_preview.html)
+          Expanded(
+            child: filteredItems.isEmpty
+                ? const Center(child: Text('해당하는 큐브가 없습니다! 🎉', style: TextStyle(color: Colors.grey)))
+                : ListView.builder(
+                    itemCount: filteredItems.length,
+                    itemBuilder: (ctx, i) {
+                      final item = filteredItems[i];
+                      final c = item.cube;
+                      final emoji = getFoodEmoji(c.name);
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
                           color: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            side: BorderSide(color: item.color.withOpacity(0.3)),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: item.isUnowned ? appPrimaryColor.withOpacity(0.5) : const Color(0xFFE2E8F0),
+                            width: item.isUnowned ? 1.5 : 1.0,
                           ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Row(
+                          boxShadow: const [
+                            BoxShadow(color: Color(0x06000000), blurRadius: 4, offset: Offset(0, 1)),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
                               children: [
-                                Text(getFoodEmoji(c.name), style: const TextStyle(fontSize: 22)),
+                                Text(emoji, style: const TextStyle(fontSize: 22)),
                                 const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Text(c.displayName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                                          if (item.urgency != null) ...[
-                                            const SizedBox(width: 6),
-                                            Text(item.urgency!, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: item.color)),
-                                          ],
-                                        ],
-                                      ),
-                                      const SizedBox(height: 2),
-                                      if (c.isPlannedOnly || c.quantity == 0)
-                                        Text('1회 권장량 ${c.unitWeight}g', style: TextStyle(fontSize: 11, color: Colors.grey.shade600))
-                                      else
-                                        Text('현재 재고 ${c.quantity}개 (개당 ${c.unitWeight}g)', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-                                      const SizedBox(height: 2),
-                                      Text('제작 마감일: ${item.deadline}', style: TextStyle(fontSize: 11, color: item.color, fontWeight: FontWeight.w600)),
-                                    ],
-                                  ),
-                                ),
-                                ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: (c.isPlannedOnly || c.quantity == 0) ? const Color(0xFF8E24AA) : appPrimaryColor,
-                                    foregroundColor: Colors.white,
-                                    visualDensity: VisualDensity.compact,
-                                  ),
-                                  onPressed: () => _showRestockDialog(c),
-                                  child: const Text('제작 완료', style: TextStyle(fontSize: 11)),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text(c.displayName, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Color(0xFF0F172A))),
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                          decoration: BoxDecoration(
+                                            color: item.isUnowned ? appPrimaryColor : const Color(0xFFF1F5F9),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Text(
+                                            item.isUnowned ? '첫 시도' : '기존 식재료',
+                                            style: TextStyle(
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.bold,
+                                              color: item.isUnowned ? Colors.white : const Color(0xFF64748B),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '${item.deadline} 식단 (${c.unitWeight}g 필요)',
+                                      style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: item.isUnowned ? appTextColor : const Color(0xFF64748B)),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
-                          ),
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFilterButton(String label, RestockFilter filter) {
-    final isSel = _filter == filter;
-    return InkWell(
-      onTap: () => setState(() => _filter = filter),
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-        decoration: BoxDecoration(
-          color: isSel ? appLightAccentColor : Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: isSel ? appPrimaryColor : Colors.grey.shade300),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
-            color: isSel ? appTextColor : Colors.black87,
+                            InkWell(
+                              onTap: () => _showRestockDialog(c),
+                              borderRadius: BorderRadius.circular(12),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: item.isUnowned ? appPrimaryColor : const Color(0xFFF1F5F9),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: item.isUnowned ? null : Border.all(color: const Color(0xFFE2E8F0)),
+                                  boxShadow: item.isUnowned
+                                      ? [BoxShadow(color: appPrimaryColor.withOpacity(0.3), blurRadius: 4, offset: const Offset(0, 1))]
+                                      : null,
+                                ),
+                                child: Text(
+                                  '제작 완료',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: item.isUnowned ? Colors.white : const Color(0xFF334155),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
           ),
-        ),
+        ],
       ),
     );
   }
