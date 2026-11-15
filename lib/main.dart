@@ -1,6 +1,60 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+
+enum BabyGender {
+  boy('남아', '👦', Color(0xFF4A8FE7), Color(0xFFEBF3FE), Color(0xFFF2F6FC), Color(0xFF1E3A8A)),
+  girl('여아', '👧', Color(0xFFF06292), Color(0xFFFDF0F4), Color(0xFFFCF5F7), Color(0xFF881337)),
+  none('기본', '🌱', Color(0xFF3EB489), Color(0xFFE8F8F2), Color(0xFFF4F9F6), Color(0xFF234E42));
+
+  final String label;
+  final String emoji;
+  final Color primary;
+  final Color lightAccent;
+  final Color background;
+  final Color textColor;
+
+  const BabyGender(this.label, this.emoji, this.primary, this.lightAccent, this.background, this.textColor);
+
+  static BabyGender fromCode(String? code) {
+    if (code == 'boy') return BabyGender.boy;
+    if (code == 'girl') return BabyGender.girl;
+    return BabyGender.none;
+  }
+
+  String get code {
+    if (this == BabyGender.boy) return 'boy';
+    if (this == BabyGender.girl) return 'girl';
+    return 'none';
+  }
+}
+
+class AppThemeController extends ChangeNotifier {
+  static final AppThemeController instance = AppThemeController._();
+  AppThemeController._();
+
+  BabyGender _gender = BabyGender.none;
+  BabyGender get gender => _gender;
+
+  Color get primaryColor => _gender.primary;
+  Color get lightAccentColor => _gender.lightAccent;
+  Color get backgroundColor => _gender.background;
+  Color get appbarTextColor => _gender.textColor;
+
+  void setGender(BabyGender g) {
+    if (_gender != g) {
+      _gender = g;
+      notifyListeners();
+    }
+  }
+}
+
+Color get appPrimaryColor => AppThemeController.instance.primaryColor;
+Color get appLightAccentColor => AppThemeController.instance.lightAccentColor;
+Color get appBgColor => AppThemeController.instance.backgroundColor;
+Color get appTextColor => AppThemeController.instance.appbarTextColor;
 
 void main() => runApp(const BabyFoodApp());
 
@@ -9,24 +63,30 @@ class BabyFoodApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: '토핑 이유식 매니저',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF3EB489),
-          primary: const Color(0xFF3EB489),
-          surface: Colors.white,
-        ),
-        scaffoldBackgroundColor: const Color(0xFFF4F9F6),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.white,
-          foregroundColor: Color(0xFF234E42),
-          elevation: 0,
-        ),
-        useMaterial3: true,
-      ),
-      home: const MainNavigationScreen(),
+    return ListenableBuilder(
+      listenable: AppThemeController.instance,
+      builder: (context, _) {
+        final ctrl = AppThemeController.instance;
+        return MaterialApp(
+          title: '토핑 이유식 매니저',
+          debugShowCheckedModeBanner: false,
+          theme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: ctrl.primaryColor,
+              primary: ctrl.primaryColor,
+              surface: Colors.white,
+            ),
+            scaffoldBackgroundColor: ctrl.backgroundColor,
+            appBarTheme: AppBarTheme(
+              backgroundColor: Colors.white,
+              foregroundColor: ctrl.appbarTextColor,
+              elevation: 0,
+            ),
+            useMaterial3: true,
+          ),
+          home: const MainNavigationScreen(),
+        );
+      },
     );
   }
 }
@@ -166,7 +226,7 @@ class CubeItem {
     final d = daysRemaining;
     if (d < 0) return const Color(0xFFE53935);
     if (d <= 2) return const Color(0xFFFB8C00);
-    return const Color(0xFF3EB489);
+    return appPrimaryColor;
   }
 
   Color get statusBgColor {
@@ -174,7 +234,7 @@ class CubeItem {
     final d = daysRemaining;
     if (d < 0) return const Color(0xFFFFEBEE);
     if (d <= 2) return const Color(0xFFFFF3E0);
-    return const Color(0xFFE8F8F2);
+    return appLightAccentColor;
   }
 
   Map<String, dynamic> toJson() => {
@@ -262,6 +322,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   List<TriedIngredient> _triedIngredients = [];
   DateTime? _birthDate;
   DateTime? _weaningStartDate;
+  BabyGender _gender = BabyGender.none;
 
   @override
   void initState() {
@@ -276,6 +337,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     final ts = prefs.getString('tried_ingredients_data');
     final bs = prefs.getString('baby_birth_date');
     final ws = prefs.getString('weaning_start_date');
+    final gs = prefs.getString('baby_gender');
 
     if (cs != null) {
       _cubes = (jsonDecode(cs) as List).map((i) => CubeItem.fromJson(i)).toList();
@@ -315,6 +377,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
     _birthDate = bs != null ? DateTime.parse(bs) : DateTime.now().subtract(const Duration(days: 180));
     _weaningStartDate = ws != null ? DateTime.parse(ws) : DateTime.now().subtract(const Duration(days: 20));
+    _gender = BabyGender.fromCode(gs);
+    AppThemeController.instance.setGender(_gender);
 
     setState(() => _isLoading = false);
   }
@@ -387,6 +451,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     await prefs.setString('tried_ingredients_data', jsonEncode(_triedIngredients.map((t) => t.toJson()).toList()));
     if (_birthDate != null) await prefs.setString('baby_birth_date', _birthDate!.toIso8601String());
     if (_weaningStartDate != null) await prefs.setString('weaning_start_date', _weaningStartDate!.toIso8601String());
+    await prefs.setString('baby_gender', _gender.code);
   }
 
   // 기한 만료 폐기(수량 0 처리) 또는 완전 삭제
@@ -439,53 +504,188 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   void _showSettings() {
     DateTime b = _birthDate ?? DateTime.now();
     DateTime w = _weaningStartDate ?? DateTime.now();
+    BabyGender g = _gender;
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDState) => AlertDialog(
-          title: const Text('아기 성장 & 이유식 설정', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.cake_outlined, color: Color(0xFF3EB489)),
-                title: const Text('아기 출생일', style: TextStyle(fontSize: 13)),
-                subtitle: Text('${b.year}.${b.month}.${b.day}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                trailing: OutlinedButton(
-                  child: const Text('변경'),
-                  onPressed: () async {
-                    final p = await showDatePicker(context: context, initialDate: b, firstDate: DateTime(2020), lastDate: DateTime.now());
-                    if (p != null) setDState(() => b = p);
-                  },
+          title: const Text('아기 성장 & 테마 설정', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('아기 성별 (테마 색상 즉시 변경)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () {
+                          setDState(() => g = BabyGender.boy);
+                          AppThemeController.instance.setGender(BabyGender.boy);
+                        },
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: g == BabyGender.boy ? const Color(0xFFEBF3FE) : Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: g == BabyGender.boy ? const Color(0xFF4A8FE7) : Colors.grey.shade300,
+                              width: g == BabyGender.boy ? 2 : 1,
+                            ),
+                          ),
+                          child: Column(
+                            children: const [
+                              Text('👦', style: TextStyle(fontSize: 20)),
+                              SizedBox(height: 2),
+                              Text('남아 (블루)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF1E3A8A))),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () {
+                          setDState(() => g = BabyGender.girl);
+                          AppThemeController.instance.setGender(BabyGender.girl);
+                        },
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: g == BabyGender.girl ? const Color(0xFFFDF0F4) : Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: g == BabyGender.girl ? const Color(0xFFF06292) : Colors.grey.shade300,
+                              width: g == BabyGender.girl ? 2 : 1,
+                            ),
+                          ),
+                          child: Column(
+                            children: const [
+                              Text('👧', style: TextStyle(fontSize: 20)),
+                              SizedBox(height: 2),
+                              Text('여아 (핑크)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF881337))),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () {
+                          setDState(() => g = BabyGender.none);
+                          AppThemeController.instance.setGender(BabyGender.none);
+                        },
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: g == BabyGender.none ? const Color(0xFFE8F8F2) : Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: g == BabyGender.none ? const Color(0xFF3EB489) : Colors.grey.shade300,
+                              width: g == BabyGender.none ? 2 : 1,
+                            ),
+                          ),
+                          child: Column(
+                            children: const [
+                              Text('🌱', style: TextStyle(fontSize: 20)),
+                              SizedBox(height: 2),
+                              Text('기본 (민트)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF234E42))),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              const Divider(),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.restaurant_outlined, color: Color(0xFF2E7D32)),
-                title: const Text('이유식 시작일', style: TextStyle(fontSize: 13)),
-                subtitle: Text('${w.year}.${w.month}.${w.day}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                trailing: OutlinedButton(
-                  child: const Text('변경'),
-                  onPressed: () async {
-                    final p = await showDatePicker(context: context, initialDate: w, firstDate: DateTime(2020), lastDate: DateTime.now().add(const Duration(days: 30)));
-                    if (p != null) setDState(() => w = p);
-                  },
+                const SizedBox(height: 12),
+                const Divider(),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.cake_outlined, color: g.primary),
+                  title: const Text('아기 출생일', style: TextStyle(fontSize: 13)),
+                  subtitle: Text('${b.year}.${b.month}.${b.day}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  trailing: OutlinedButton(
+                    child: const Text('변경'),
+                    onPressed: () async {
+                      final p = await showDatePicker(context: context, initialDate: b, firstDate: DateTime(2020), lastDate: DateTime.now());
+                      if (p != null) setDState(() => b = p);
+                    },
+                  ),
                 ),
-              ),
-            ],
+                const Divider(),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.restaurant_outlined, color: Color(0xFF2E7D32)),
+                  title: const Text('이유식 시작일', style: TextStyle(fontSize: 13)),
+                  subtitle: Text('${w.year}.${w.month}.${w.day}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  trailing: OutlinedButton(
+                    child: const Text('변경'),
+                    onPressed: () async {
+                      final p = await showDatePicker(context: context, initialDate: w, firstDate: DateTime(2020), lastDate: DateTime.now().add(const Duration(days: 30)));
+                      if (p != null) setDState(() => w = p);
+                    },
+                  ),
+                ),
+                const Divider(),
+                const SizedBox(height: 4),
+                const Text('데이터 백업 & 복원', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.download_rounded, size: 15),
+                        label: const Text('기존 웹앱 데이터 가져오기', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          foregroundColor: appPrimaryColor,
+                          side: BorderSide(color: appPrimaryColor),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _showImportDataDialog();
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.copy_rounded, size: 15),
+                      label: const Text('백업 복사', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+                      ),
+                      onPressed: _exportDataToClipboard,
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
+            TextButton(
+              onPressed: () {
+                AppThemeController.instance.setGender(_gender);
+                Navigator.pop(ctx);
+              },
+              child: const Text('취소'),
+            ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF3EB489), foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(backgroundColor: g.primary, foregroundColor: Colors.white),
               onPressed: () {
                 setState(() {
                   _birthDate = b;
                   _weaningStartDate = w;
+                  _gender = g;
                 });
+                AppThemeController.instance.setGender(g);
                 _saveData();
                 Navigator.pop(ctx);
               },
@@ -495,6 +695,130 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         ),
       ),
     );
+  }
+
+  void _showImportDataDialog() {
+    final textCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.sync_alt, color: Color(0xFF3B82F6)),
+            SizedBox(width: 8),
+            Text('웹앱 데이터 가져오기', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '기존 웹앱에서 복사한 백업 데이터를 아래 입력칸에 붙여넣고 [데이터 복원]을 누르세요.\n'
+                '(모든 식단 기록, 큐브 재고, 아기 날짜 설정이 즉시 복원됩니다.)',
+                style: TextStyle(fontSize: 12, height: 1.5, color: Colors.black87),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: textCtrl,
+                maxLines: 7,
+                style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+                decoration: InputDecoration(
+                  hintText: '여기에 복사한 JSON 데이터를 붙여넣으세요...',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  filled: true,
+                  fillColor: Colors.grey.shade50,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: appPrimaryColor, foregroundColor: Colors.white),
+            onPressed: () async {
+              final raw = textCtrl.text.trim();
+              if (raw.isEmpty) return;
+              try {
+                final dynamic decoded = jsonDecode(raw);
+                if (decoded is! Map<String, dynamic>) {
+                  throw 'JSON 객체 형식이 아닙니다.';
+                }
+                final Map<String, dynamic> data = decoded;
+                final prefs = await SharedPreferences.getInstance();
+
+                if (data.containsKey('cubes_data') && data['cubes_data'] != null) {
+                  final cs = data['cubes_data'] is String ? data['cubes_data'] as String : jsonEncode(data['cubes_data']);
+                  await prefs.setString('cubes_data', cs);
+                  _cubes = (jsonDecode(cs) as List).map((i) => CubeItem.fromJson(i)).toList();
+                }
+                if (data.containsKey('meals_data') && data['meals_data'] != null) {
+                  final ms = data['meals_data'] is String ? data['meals_data'] as String : jsonEncode(data['meals_data']);
+                  await prefs.setString('meals_data', ms);
+                  _mealLogs = (jsonDecode(ms) as List).map((i) => MealLog.fromJson(i)).toList();
+                }
+                if (data.containsKey('tried_ingredients_data') && data['tried_ingredients_data'] != null) {
+                  final ts = data['tried_ingredients_data'] is String ? data['tried_ingredients_data'] as String : jsonEncode(data['tried_ingredients_data']);
+                  await prefs.setString('tried_ingredients_data', ts);
+                  _triedIngredients = (jsonDecode(ts) as List).map((i) => TriedIngredient.fromJson(i)).toList();
+                }
+                if (data.containsKey('baby_birth_date') && data['baby_birth_date'] != null) {
+                  final bs = data['baby_birth_date'].toString();
+                  await prefs.setString('baby_birth_date', bs);
+                  _birthDate = DateTime.tryParse(bs);
+                }
+                if (data.containsKey('weaning_start_date') && data['weaning_start_date'] != null) {
+                  final ws = data['weaning_start_date'].toString();
+                  await prefs.setString('weaning_start_date', ws);
+                  _weaningStartDate = DateTime.tryParse(ws);
+                }
+                if (data.containsKey('baby_gender') && data['baby_gender'] != null) {
+                  final gs = data['baby_gender'].toString();
+                  _gender = BabyGender.fromCode(gs);
+                  await prefs.setString('baby_gender', _gender.code);
+                  AppThemeController.instance.setGender(_gender);
+                }
+                _syncTriedIngredients();
+                setState(() {});
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('🎉 데이터 복원 완료! (식단 ${_mealLogs.length}개, 큐브 ${_cubes.length}개)'),
+                    backgroundColor: appPrimaryColor,
+                  ),
+                );
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('데이터 복원 실패: 올바른 백업 데이터가 아닙니다 ($e)'), backgroundColor: Colors.red),
+                );
+              }
+            },
+            child: const Text('데이터 복원하기'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _exportDataToClipboard() async {
+    final prefs = await SharedPreferences.getInstance();
+    final data = {
+      'cubes_data': prefs.getString('cubes_data'),
+      'meals_data': prefs.getString('meals_data'),
+      'tried_ingredients_data': prefs.getString('tried_ingredients_data'),
+      'baby_birth_date': prefs.getString('baby_birth_date'),
+      'weaning_start_date': prefs.getString('weaning_start_date'),
+      'baby_gender': _gender.code,
+    };
+    await Clipboard.setData(ClipboardData(text: jsonEncode(data)));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: const Text('📋 현재 데이터가 클립보드에 복사되었습니다!'), backgroundColor: appPrimaryColor),
+      );
+    }
   }
 
   void _addMealRecord({
@@ -574,7 +898,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('[${mealType.label}] 식단이 성공적으로 저장되었습니다.'), backgroundColor: const Color(0xFF3EB489)),
+        SnackBar(content: Text('[${mealType.label}] 식단이 성공적으로 저장되었습니다.'), backgroundColor: appPrimaryColor),
       );
     }
   }
@@ -593,29 +917,33 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     });
     _saveData();
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('[${log.mealType.label}] 식사 완료! 큐브가 차감되었습니다.'), backgroundColor: const Color(0xFF3EB489)),
+      SnackBar(content: Text('[${log.mealType.label}] 식사 완료! 큐브가 차감되었습니다.'), backgroundColor: appPrimaryColor),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator(color: Color(0xFF3EB489))));
+      return Scaffold(body: Center(child: CircularProgressIndicator(color: appPrimaryColor)));
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Row(
-          children: [
-            Icon(Icons.eco_rounded, color: Color(0xFF3EB489), size: 22),
-            SizedBox(width: 6),
-            Text('토핑 이유식 매니저', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF234E42))),
+    return ListenableBuilder(
+      listenable: AppThemeController.instance,
+      builder: (context, _) => Scaffold(
+        backgroundColor: appBgColor,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          title: Row(
+            children: [
+              Text(AppThemeController.instance.gender.emoji, style: const TextStyle(fontSize: 20)),
+              const SizedBox(width: 8),
+              Text('토핑 이유식 매니저', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: appTextColor)),
+            ],
+          ),
+          actions: [
+            IconButton(icon: Icon(Icons.settings_outlined, color: appTextColor), onPressed: _showSettings),
           ],
         ),
-        actions: [
-          IconButton(icon: const Icon(Icons.settings_outlined, color: Color(0xFF234E42)), onPressed: _showSettings),
-        ],
-      ),
       body: IndexedStack(
         index: _currentTabIndex,
         children: [
@@ -746,18 +1074,19 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentTabIndex,
-        indicatorColor: const Color(0xFFE8F8F2),
+        indicatorColor: appLightAccentColor,
         backgroundColor: Colors.white,
         onDestinationSelected: (idx) => setState(() => _currentTabIndex = idx),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.calendar_month_outlined), selectedIcon: Icon(Icons.calendar_month, color: Color(0xFF3EB489)), label: '캘린더'),
-          NavigationDestination(icon: Icon(Icons.edit_note_outlined), selectedIcon: Icon(Icons.edit_note, color: Color(0xFF3EB489)), label: '식단 기록'),
-          NavigationDestination(icon: Icon(Icons.kitchen_outlined), selectedIcon: Icon(Icons.kitchen, color: Color(0xFF3EB489)), label: '보관함'),
-          NavigationDestination(icon: Icon(Icons.alarm_on_outlined), selectedIcon: Icon(Icons.alarm_on, color: Color(0xFF3EB489)), label: '제작 필요'),
+        destinations: [
+          NavigationDestination(icon: const Icon(Icons.calendar_month_outlined), selectedIcon: Icon(Icons.calendar_month, color: appPrimaryColor), label: '캘린더'),
+          NavigationDestination(icon: const Icon(Icons.edit_note_outlined), selectedIcon: Icon(Icons.edit_note, color: appPrimaryColor), label: '식단 기록'),
+          NavigationDestination(icon: const Icon(Icons.kitchen_outlined), selectedIcon: Icon(Icons.kitchen, color: appPrimaryColor), label: '보관함'),
+          NavigationDestination(icon: const Icon(Icons.alarm_on_outlined), selectedIcon: Icon(Icons.alarm_on, color: appPrimaryColor), label: '제작 필요'),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 String calculateDdayString(DateTime targetDate, DateTime? birthDate, DateTime? weaningStartDate) {
@@ -863,7 +1192,7 @@ class _MealLogTabState extends State<MealLogTab> {
                           children: [
                             Text(
                               '기존 용량 ${item.lastUnitWeight}g · ${hasStock ? "현재 보유중 (${widget.cubes[existingCubeIdx].quantity}개)" : "현재 재고 없음 (재제작 필요)"}',
-                              style: TextStyle(fontSize: 11, color: hasStock ? const Color(0xFF3EB489) : const Color(0xFFE53935), fontWeight: FontWeight.w600),
+                              style: TextStyle(fontSize: 11, color: hasStock ? appPrimaryColor : const Color(0xFFE53935), fontWeight: FontWeight.w600),
                             ),
                             Text(
                               item.hasAlertReaction ? '⚠️ 주의 이력: ${item.lastReactionNote}' : '✅ 과거 반응: ${item.lastReactionNote}',
@@ -873,7 +1202,7 @@ class _MealLogTabState extends State<MealLogTab> {
                         ),
                         trailing: ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF3EB489),
+                            backgroundColor: appPrimaryColor,
                             foregroundColor: Colors.white,
                             visualDensity: VisualDensity.compact,
                             padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -940,7 +1269,7 @@ class _MealLogTabState extends State<MealLogTab> {
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF3EB489), foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(backgroundColor: appPrimaryColor, foregroundColor: Colors.white),
               onPressed: () {
                 final n = nameCtrl.text.trim();
                 if (n.isEmpty) return;
@@ -999,7 +1328,7 @@ class _MealLogTabState extends State<MealLogTab> {
               children: [
                 Row(
                   children: [
-                    Icon(_repeatDays > 1 ? Icons.date_range : Icons.calendar_today_outlined, color: const Color(0xFF3EB489), size: 22),
+                    Icon(_repeatDays > 1 ? Icons.date_range : Icons.calendar_today_outlined, color: appPrimaryColor, size: 22),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
@@ -1007,11 +1336,11 @@ class _MealLogTabState extends State<MealLogTab> {
                         children: [
                           Text(
                             _repeatDays > 1 ? '$_repeatDays일 연속 동일 식단' : '식단 날짜',
-                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF3EB489)),
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: appPrimaryColor),
                           ),
                           Text(
                             _repeatDays > 1 ? '${_startDate.month}/${_startDate.day} ~ ${_endDate.month}/${_endDate.day}' : '${_startDate.year}년 ${_startDate.month}월 ${_startDate.day}일',
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF234E42)),
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: appTextColor),
                           ),
                         ],
                       ),
@@ -1028,7 +1357,7 @@ class _MealLogTabState extends State<MealLogTab> {
                       },
                       icon: const Icon(Icons.calendar_month, size: 14),
                       label: const Text('기간 달력', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE8F8F2), foregroundColor: const Color(0xFF234E42), elevation: 0),
+                      style: ElevatedButton.styleFrom(backgroundColor: appLightAccentColor, foregroundColor: appTextColor, elevation: 0),
                     ),
                   ],
                 ),
@@ -1043,9 +1372,9 @@ class _MealLogTabState extends State<MealLogTab> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                         decoration: BoxDecoration(
-                          color: _repeatDays == 1 ? const Color(0xFF3EB489) : const Color(0xFFF1F3F5),
+                          color: _repeatDays == 1 ? appPrimaryColor : const Color(0xFFF1F3F5),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: _repeatDays == 1 ? const Color(0xFF3EB489) : Colors.grey.shade300),
+                          border: Border.all(color: _repeatDays == 1 ? appPrimaryColor : Colors.grey.shade300),
                         ),
                         child: Text('하루만', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: _repeatDays == 1 ? Colors.white : Colors.black87)),
                       ),
@@ -1057,9 +1386,9 @@ class _MealLogTabState extends State<MealLogTab> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                         decoration: BoxDecoration(
-                          color: _repeatDays == 3 ? const Color(0xFF3EB489) : const Color(0xFFF1F3F5),
+                          color: _repeatDays == 3 ? appPrimaryColor : const Color(0xFFF1F3F5),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: _repeatDays == 3 ? const Color(0xFF3EB489) : Colors.grey.shade300),
+                          border: Border.all(color: _repeatDays == 3 ? appPrimaryColor : Colors.grey.shade300),
                         ),
                         child: Row(
                           children: [
@@ -1074,7 +1403,7 @@ class _MealLogTabState extends State<MealLogTab> {
                 ),
                 if (ddayStr.isNotEmpty && _repeatDays == 1) ...[
                   const SizedBox(height: 10),
-                  Text(ddayStr, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF3EB489))),
+                  Text(ddayStr, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: appPrimaryColor)),
                 ],
                 const Divider(height: 20),
                 Row(
@@ -1136,7 +1465,7 @@ class _MealLogTabState extends State<MealLogTab> {
                       children: [
                         const Text('토핑 큐브 담기 (1끼 기준)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF234E42))),
                         IconButton(
-                          icon: const Icon(Icons.info_outline, size: 17, color: Color(0xFF3EB489)),
+                          icon: Icon(Icons.info_outline, size: 17, color: appPrimaryColor),
                           onPressed: () => showDialog(
                             context: context,
                             builder: (ctx) => AlertDialog(
@@ -1148,7 +1477,7 @@ class _MealLogTabState extends State<MealLogTab> {
                         ),
                       ],
                     ),
-                    Text('총 $totalG g', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF3EB489))),
+                    Text('총 $totalG g', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: appPrimaryColor)),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -1213,8 +1542,8 @@ class _MealLogTabState extends State<MealLogTab> {
                       child: OutlinedButton(
                         onPressed: _showTriedHistoryDialog,
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF234E42),
-                          side: const BorderSide(color: Color(0xFF3EB489)),
+                          foregroundColor: appTextColor,
+                          side: BorderSide(color: appPrimaryColor),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           padding: const EdgeInsets.symmetric(vertical: 10),
                         ),
@@ -1255,7 +1584,7 @@ class _MealLogTabState extends State<MealLogTab> {
                   const SizedBox(height: 8),
                   _buildTagGroup('배변 상태', _stoolTags, const Color(0xFFF57C00)),
                   const SizedBox(height: 8),
-                  _buildTagGroup('식사 태도', _attitudeTags, const Color(0xFF3EB489)),
+                  _buildTagGroup('식사 태도', _attitudeTags, appPrimaryColor),
                 ],
               ),
             ),
@@ -1277,7 +1606,7 @@ class _MealLogTabState extends State<MealLogTab> {
             width: double.infinity,
             height: 48,
             child: ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF3EB489), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+              style: ElevatedButton.styleFrom(backgroundColor: appPrimaryColor, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
               onPressed: () {
                 if (_selectedQuantities.isEmpty) return;
                 final dt = DateTime(_startDate.year, _startDate.month, _startDate.day, _selectedTime.hour, _selectedTime.minute);
@@ -1436,7 +1765,7 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text('토핑 큐브 조정', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
-                        Text('총 $computedGrams g', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF3EB489))),
+                        Text('총 $computedGrams g', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: appPrimaryColor)),
                       ],
                     ),
                     const SizedBox(height: 8),
@@ -1542,7 +1871,7 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
     final dday = calculateDdayString(_selectedDate, widget.birthDate, widget.weaningStartDate);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F9F6),
+      backgroundColor: appBgColor,
       body: Column(
         children: [
           Container(
@@ -1605,7 +1934,7 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text('${_selectedDate.month}월 ${_selectedDate.day}일 식단', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF234E42))),
-                if (dday.isNotEmpty) Text(dday, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF3EB489))),
+                if (dday.isNotEmpty) Text(dday, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: appPrimaryColor)),
               ],
             ),
           ),
@@ -1707,7 +2036,7 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                                     const SizedBox(width: 6),
                                     Expanded(
                                       child: ElevatedButton(
-                                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF3EB489), foregroundColor: Colors.white, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero),
+                                        style: ElevatedButton.styleFrom(backgroundColor: appPrimaryColor, foregroundColor: Colors.white, visualDensity: VisualDensity.compact, padding: EdgeInsets.zero),
                                         onPressed: () => widget.onCompleteMeal(l),
                                         child: const Text('식사 완료 (차감)', style: TextStyle(fontSize: 11)),
                                       ),
@@ -1789,7 +2118,7 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: (isSel || isToday) ? FontWeight.bold : FontWeight.normal,
-                      color: isSel ? Colors.white : (isToday ? const Color(0xFF3EB489) : Colors.black87),
+                      color: isSel ? Colors.white : (isToday ? appPrimaryColor : Colors.black87),
                     ),
                   ),
                   if (_getLogsForDate(d).isNotEmpty)
@@ -1847,7 +2176,7 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: (isSel || isToday) ? FontWeight.bold : FontWeight.normal,
-                          color: isSel ? Colors.white : (isToday ? const Color(0xFF3EB489) : Colors.black87),
+                          color: isSel ? Colors.white : (isToday ? appPrimaryColor : Colors.black87),
                         ),
                       ),
                       if (_getLogsForDate(d).isNotEmpty)
@@ -2100,7 +2429,7 @@ class _CubeStockTabState extends State<CubeStockTab> {
     });
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F9F6),
+      backgroundColor: appBgColor,
       body: Column(
         children: [
           Container(
@@ -2504,7 +2833,7 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
     }).toList();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F9F6),
+      backgroundColor: appBgColor,
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -2520,7 +2849,7 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
               ],
             ),
             const SizedBox(height: 14),
-            Text('제작 필요 토핑 (${filteredItems.length}개)', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF234E42))),
+            Text('제작 필요 토핑 (${filteredItems.length}개)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: appTextColor)),
             const SizedBox(height: 10),
             Expanded(
               child: filteredItems.isEmpty
@@ -2570,7 +2899,7 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
                                 ),
                                 ElevatedButton(
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: (c.isPlannedOnly || c.quantity == 0) ? const Color(0xFF8E24AA) : const Color(0xFF3EB489),
+                                    backgroundColor: (c.isPlannedOnly || c.quantity == 0) ? const Color(0xFF8E24AA) : appPrimaryColor,
                                     foregroundColor: Colors.white,
                                     visualDensity: VisualDensity.compact,
                                   ),
