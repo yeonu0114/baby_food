@@ -420,6 +420,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentTabIndex = 0;
   bool _isLoading = true;
 
+  String _babyName = '또핑';
   List<CubeItem> _cubes = [];
   List<MealLog> _mealLogs = [];
   List<TriedIngredient> _triedIngredients = [];
@@ -435,6 +436,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
+    _babyName = prefs.getString('baby_name') ?? '또핑';
     final cs = prefs.getString('cubes_data');
     final ms = prefs.getString('meals_data');
     final ts = prefs.getString('tried_ingredients_data');
@@ -608,6 +610,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   Future<void> _saveData() async {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('baby_name', _babyName);
     await prefs.setString('cubes_data', jsonEncode(_cubes.map((c) => c.toJson()).toList()));
     await prefs.setString('meals_data', jsonEncode(_mealLogs.map((m) => m.toJson()).toList()));
     await prefs.setString('tried_ingredients_data', jsonEncode(_triedIngredients.map((t) => t.toJson()).toList()));
@@ -660,6 +663,86 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     );
   }
 
+  void _editPlannedTopping(CubeItem cube, String newName, FoodCategory newCategory, int newUnitWeight, String newSubOption) {
+    setState(() {
+      final oldName = cube.name;
+
+      // 1. _cubes 목록에서 대상 찾아서 수정 또는 추가
+      final idx = _cubes.indexWhere((c) => c.id == cube.id || c.name == oldName);
+      if (idx != -1) {
+        _cubes[idx].name = newName;
+        _cubes[idx].category = newCategory;
+        _cubes[idx].unitWeight = newUnitWeight;
+        _cubes[idx].subOption = newSubOption;
+      } else {
+        _cubes.add(CubeItem(
+          id: cube.id.startsWith('virtual_') ? DateTime.now().millisecondsSinceEpoch.toString() : cube.id,
+          name: newName,
+          category: newCategory,
+          unitWeight: newUnitWeight,
+          quantity: 0,
+          madeDate: DateTime.now(),
+          expireDate: DateTime.now().add(const Duration(days: 14)),
+          subOption: newSubOption,
+          isPlannedOnly: true,
+        ));
+      }
+
+      // 2. 예정된 식단 목록(upcoming mealLogs)에서 해당 재료명 일괄 변경
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final newDisplayName = newSubOption.isNotEmpty ? '$newName($newSubOption)' : newName;
+
+      for (var l in _mealLogs) {
+        final logDay = DateTime(l.time.year, l.time.month, l.time.day);
+        final isUpcoming = logDay.isAfter(today) || (logDay.isAtSameMomentAs(today) && l.isPlanned);
+        if (isUpcoming) {
+          for (int i = 0; i < l.ingredients.length; i++) {
+            final ing = l.ingredients[i];
+            if (ing.contains(oldName)) {
+              final match = RegExp(r'\s+(\d+g.*)$').firstMatch(ing);
+              final suffix = match != null ? ' ${match.group(1)}' : ' ${newUnitWeight}g';
+              l.ingredients[i] = '$newDisplayName$suffix';
+            }
+          }
+        }
+      }
+
+      _recordTriedIngredient(newName, newCategory, newUnitWeight);
+    });
+    _saveData();
+  }
+
+  void _deletePlannedTopping(CubeItem cube) {
+    setState(() {
+      final targetName = cube.name;
+
+      // 1. _cubes에서 삭제
+      _cubes.removeWhere((c) => c.id == cube.id || c.name == targetName);
+
+      // 2. 예정된 식단(upcoming mealLogs)에서도 해당 재료 및 큐브 사용 삭제
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      for (var l in _mealLogs) {
+        final logDay = DateTime(l.time.year, l.time.month, l.time.day);
+        final isUpcoming = logDay.isAfter(today) || (logDay.isAtSameMomentAs(today) && l.isPlanned);
+        if (isUpcoming) {
+          l.cubeUsage.remove(cube.id);
+          l.ingredients.removeWhere((ing) => ing.contains(targetName));
+
+          // totalGrams 재계산
+          int newTotal = 0;
+          for (var ing in l.ingredients) {
+            final m = RegExp(r'(\d+)g').firstMatch(ing);
+            if (m != null) newTotal += int.tryParse(m.group(1)!) ?? 0;
+          }
+          l.totalGrams = newTotal;
+        }
+      }
+    });
+    _saveData();
+  }
+
   String _buildBabySubtitle() {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -691,6 +774,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     DateTime b = _birthDate ?? DateTime.now();
     DateTime w = _weaningStartDate ?? DateTime.now();
     BabyGender g = _gender;
+    final nameCtrl = TextEditingController(text: _babyName);
 
     showDialog(
       context: context,
@@ -703,6 +787,19 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const Text('👶 아기 이름', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: nameCtrl,
+                  decoration: InputDecoration(
+                    hintText: '아기 이름을 입력해 주세요 (예: 또핑, 로아, 하준)',
+                    prefixIcon: const Icon(Icons.face_outlined, size: 18),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    isDense: true,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 14),
                 const Text('🌸 테마 색상 선택 (즉시 적용)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 Row(
@@ -868,6 +965,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               style: ElevatedButton.styleFrom(backgroundColor: g.primary, foregroundColor: Colors.white),
               onPressed: () {
                 setState(() {
+                  _babyName = nameCtrl.text.trim().isNotEmpty ? nameCtrl.text.trim() : '또핑';
                   _birthDate = b;
                   _weaningStartDate = w;
                   _gender = g;
@@ -962,6 +1060,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                   await prefs.setString('weaning_start_date', ws);
                   _weaningStartDate = DateTime.tryParse(ws);
                 }
+                if (data.containsKey('baby_name') && data['baby_name'] != null) {
+                  _babyName = data['baby_name'].toString();
+                  await prefs.setString('baby_name', _babyName);
+                }
                 if (data.containsKey('baby_gender') && data['baby_gender'] != null) {
                   final gs = data['baby_gender'].toString();
                   _gender = BabyGender.fromCode(gs);
@@ -993,6 +1095,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   void _exportDataToClipboard() async {
     final prefs = await SharedPreferences.getInstance();
     final data = {
+      'baby_name': _babyName,
       'cubes_data': prefs.getString('cubes_data'),
       'meals_data': prefs.getString('meals_data'),
       'tried_ingredients_data': prefs.getString('tried_ingredients_data'),
@@ -1222,9 +1325,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                       children: [
                         Row(
                           children: [
-                            const Text(
-                              '또핑',
-                              style: TextStyle(
+                            Text(
+                              _babyName.isNotEmpty ? _babyName : '또핑',
+                              style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w900,
                                 color: Color(0xFF0F172A),
@@ -1390,6 +1493,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 });
                 _saveData();
               },
+              onEditPlannedTopping: _editPlannedTopping,
+              onDeletePlannedTopping: _deletePlannedTopping,
             ),
             MealLogTab(
               cubes: _cubes,
@@ -3260,6 +3365,8 @@ class CubeStorageHubTab extends StatefulWidget {
   final Function(CubeItem) onDiscardCube;
   final Function(CubeItem) onDeleteCube;
   final Function(CubeItem, int, int, DateTime, int) onRestock;
+  final Function(CubeItem, String, FoodCategory, int, String)? onEditPlannedTopping;
+  final Function(CubeItem)? onDeletePlannedTopping;
 
   const CubeStorageHubTab({
     super.key,
@@ -3272,6 +3379,8 @@ class CubeStorageHubTab extends StatefulWidget {
     required this.onDiscardCube,
     required this.onDeleteCube,
     required this.onRestock,
+    this.onEditPlannedTopping,
+    this.onDeletePlannedTopping,
   });
 
   @override
@@ -3423,6 +3532,8 @@ class _CubeStorageHubTabState extends State<CubeStorageHubTab> {
                 mealLogs: widget.mealLogs,
                 triedIngredients: widget.triedIngredients,
                 onRestock: widget.onRestock,
+                onEditPlannedTopping: widget.onEditPlannedTopping,
+                onDeletePlannedTopping: widget.onDeletePlannedTopping,
               ),
             ],
           ),
@@ -4161,6 +4272,8 @@ class RestockPlanTab extends StatefulWidget {
   final List<MealLog> mealLogs;
   final List<TriedIngredient> triedIngredients;
   final Function(CubeItem, int, int, DateTime, int) onRestock;
+  final Function(CubeItem, String, FoodCategory, int, String)? onEditPlannedTopping;
+  final Function(CubeItem)? onDeletePlannedTopping;
 
   const RestockPlanTab({
     super.key,
@@ -4168,6 +4281,8 @@ class RestockPlanTab extends StatefulWidget {
     required this.mealLogs,
     required this.triedIngredients,
     required this.onRestock,
+    this.onEditPlannedTopping,
+    this.onDeletePlannedTopping,
   });
 
   @override
@@ -4246,6 +4361,130 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showEditPlannedDialog(CubeItem c) {
+    final nCtrl = TextEditingController(text: c.name);
+    final weightCtrl = TextEditingController(text: '${c.unitWeight}');
+    FoodCategory cat = c.category;
+    String selectedSubOption = c.subOption;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text('${c.displayName} 수정', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(controller: nCtrl, decoration: const InputDecoration(labelText: '식재료명')),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<FoodCategory>(
+                  value: cat,
+                  decoration: const InputDecoration(labelText: '카테고리'),
+                  items: FoodCategory.values.map((item) => DropdownMenuItem(value: item, child: Text(item.label))).toList(),
+                  onChanged: (v) => setDState(() {
+                    cat = v!;
+                    selectedSubOption = '';
+                  }),
+                ),
+                if (cat == FoodCategory.grain) ...[
+                  const SizedBox(height: 10),
+                  Text('배죽 옵션 (선택)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: kGrainPorridgeOptions.map((opt) {
+                      final isSel = selectedSubOption == opt;
+                      return ChoiceChip(
+                        label: Text(opt, style: TextStyle(fontSize: 11, fontWeight: isSel ? FontWeight.bold : FontWeight.normal, color: isSel ? Colors.white : Colors.black87)),
+                        selected: isSel,
+                        selectedColor: appPrimaryColor,
+                        backgroundColor: const Color(0xFFF1F5F9),
+                        showCheckmark: false,
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+                        onSelected: (val) => setDState(() => selectedSubOption = val ? opt : ''),
+                      );
+                    }).toList(),
+                  ),
+                ] else if (cat == FoodCategory.meat) ...[
+                  const SizedBox(height: 10),
+                  Text('부위 옵션 (선택)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: kMeatCutOptions.map((opt) {
+                      final isSel = selectedSubOption == opt;
+                      return ChoiceChip(
+                        label: Text(opt, style: TextStyle(fontSize: 11, fontWeight: isSel ? FontWeight.bold : FontWeight.normal, color: isSel ? Colors.white : Colors.black87)),
+                        selected: isSel,
+                        selectedColor: appPrimaryColor,
+                        backgroundColor: const Color(0xFFF1F5F9),
+                        showCheckmark: false,
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+                        onSelected: (val) => setDState(() => selectedSubOption = val ? opt : ''),
+                      );
+                    }).toList(),
+                  ),
+                ],
+                const SizedBox(height: 10),
+                TextField(controller: weightCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '1개 용량 (g)')),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: appPrimaryColor, foregroundColor: Colors.white),
+              onPressed: () {
+                final newName = nCtrl.text.trim();
+                if (newName.isEmpty) return;
+                final newWeight = int.tryParse(weightCtrl.text) ?? c.unitWeight;
+                widget.onEditPlannedTopping?.call(c, newName, cat, newWeight, selectedSubOption);
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('✨ $newName 정보가 수정되었습니다.'), backgroundColor: appPrimaryColor),
+                );
+              },
+              child: const Text('수정 저장'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _confirmDeletePlanned(CubeItem c) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('토핑 삭제', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        content: Text(
+          '\'${c.displayName}\' 토핑을 삭제하시겠습니까?\n\n제작 필요 목록에서 제거되며, 예정된 식단 계획에서도 이 식재료가 함께 제외됩니다.',
+          style: const TextStyle(fontSize: 13, height: 1.4),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFEF4444), foregroundColor: Colors.white),
+            onPressed: () {
+              widget.onDeletePlannedTopping?.call(c);
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('🗑️ ${c.displayName} 토핑이 삭제되었습니다.'), backgroundColor: const Color(0xFFEF4444)),
+              );
+            },
+            child: const Text('삭제'),
+          ),
+        ],
       ),
     );
   }
@@ -4537,65 +4776,117 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Row(
-                              children: [
-                                Text(emoji, style: const TextStyle(fontSize: 22)),
-                                const SizedBox(width: 10),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
+                            Expanded(
+                              child: Row(
+                                children: [
+                                  Text(emoji, style: const TextStyle(fontSize: 22)),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text(c.displayName, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Color(0xFF0F172A))),
-                                        const SizedBox(width: 6),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                                          decoration: BoxDecoration(
-                                            color: item.isFirstTry ? appPrimaryColor : const Color(0xFFF1F5F9),
-                                            borderRadius: BorderRadius.circular(8),
-                                          ),
-                                          child: Text(
-                                            item.isFirstTry ? '첫 시도' : '기존 식재료',
-                                            style: TextStyle(
-                                              fontSize: 9,
-                                              fontWeight: FontWeight.bold,
-                                              color: item.isFirstTry ? Colors.white : const Color(0xFF64748B),
+                                        Row(
+                                          children: [
+                                            Flexible(
+                                              child: Text(
+                                                c.displayName,
+                                                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Color(0xFF0F172A)),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
                                             ),
-                                          ),
+                                            const SizedBox(width: 6),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                              decoration: BoxDecoration(
+                                                color: item.isFirstTry ? appPrimaryColor : const Color(0xFFF1F5F9),
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                              child: Text(
+                                                item.isFirstTry ? '첫 시도' : '기존 식재료',
+                                                style: TextStyle(
+                                                  fontSize: 9,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: item.isFirstTry ? Colors.white : const Color(0xFF64748B),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          '${item.deadline} 식단 (${c.unitWeight}g 필요)',
+                                          style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: item.isUnowned ? appTextColor : const Color(0xFF64748B)),
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ],
                                     ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      '${item.deadline} 식단 (${c.unitWeight}g 필요)',
-                                      style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: item.isUnowned ? appTextColor : const Color(0xFF64748B)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                InkWell(
+                                  onTap: () => _showRestockDialog(c),
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: item.isUnowned ? appPrimaryColor : const Color(0xFFF1F5F9),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: item.isUnowned ? null : Border.all(color: const Color(0xFFE2E8F0)),
+                                      boxShadow: item.isUnowned
+                                          ? [BoxShadow(color: appPrimaryColor.withOpacity(0.3), blurRadius: 4, offset: const Offset(0, 1))]
+                                          : null,
+                                    ),
+                                    child: Text(
+                                      '제작 완료',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: item.isUnowned ? Colors.white : const Color(0xFF334155),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                PopupMenuButton<String>(
+                                  icon: const Icon(Icons.more_vert, size: 20, color: Color(0xFF94A3B8)),
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  onSelected: (val) {
+                                    if (val == 'edit') {
+                                      _showEditPlannedDialog(c);
+                                    } else if (val == 'delete') {
+                                      _confirmDeletePlanned(c);
+                                    }
+                                  },
+                                  itemBuilder: (ctx) => [
+                                    const PopupMenuItem(
+                                      value: 'edit',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.edit_outlined, size: 16, color: Color(0xFF0F172A)),
+                                          SizedBox(width: 8),
+                                          Text('토핑 수정', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                                        ],
+                                      ),
+                                    ),
+                                    const PopupMenuItem(
+                                      value: 'delete',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.delete_outline, size: 16, color: Color(0xFFEF4444)),
+                                          SizedBox(width: 8),
+                                          Text('토핑 삭제', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFFEF4444))),
+                                        ],
+                                      ),
                                     ),
                                   ],
                                 ),
                               ],
-                            ),
-                            InkWell(
-                              onTap: () => _showRestockDialog(c),
-                              borderRadius: BorderRadius.circular(12),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: item.isUnowned ? appPrimaryColor : const Color(0xFFF1F5F9),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: item.isUnowned ? null : Border.all(color: const Color(0xFFE2E8F0)),
-                                  boxShadow: item.isUnowned
-                                      ? [BoxShadow(color: appPrimaryColor.withOpacity(0.3), blurRadius: 4, offset: const Offset(0, 1))]
-                                      : null,
-                                ),
-                                child: Text(
-                                  '제작 완료',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: item.isUnowned ? Colors.white : const Color(0xFF334155),
-                                  ),
-                                ),
-                              ),
                             ),
                           ],
                         ),
