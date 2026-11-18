@@ -1464,9 +1464,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               },
               onDiscardCube: (c) => _handleDiscardOrDeleteCube(c, isDiscardOnly: true),
               onDeleteCube: (c) => _handleDiscardOrDeleteCube(c, isDiscardOnly: false),
-              onRestock: (c, w, q, md, sl) {
+              onRestock: (c, w, q, md, sl, subOpt) {
                 setState(() {
-                  final existingIdx = _cubes.indexWhere((item) => item.id == c.id || item.name == c.name);
+                  final baseName = getCanonicalBaseIngredient(c.name);
+
+                  // 1) baseName과 subOption이 일치하는 실보유 큐브가 이미 있는지 확인
+                  final existingIdx = _cubes.indexWhere((item) =>
+                      getCanonicalBaseIngredient(item.name) == baseName && item.subOption == subOpt);
                   if (existingIdx != -1) {
                     _cubes[existingIdx].unitWeight = w;
                     _cubes[existingIdx].quantity += q;
@@ -1474,22 +1478,55 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                     _cubes[existingIdx].expireDate = md.add(Duration(days: sl));
                     _cubes[existingIdx].isPlannedOnly = false;
                   } else {
-                    _cubes.insert(
-                      0,
-                      CubeItem(
-                        id: DateTime.now().millisecondsSinceEpoch.toString(),
-                        name: c.name,
-                        category: c.category,
-                        unitWeight: w,
-                        quantity: q,
-                        madeDate: md,
-                        expireDate: md.add(Duration(days: sl)),
-                        subOption: c.subOption,
-                        isPlannedOnly: false,
-                      ),
-                    );
+                    // baseName의 식단 예정(isPlannedOnly) 큐브가 있으면 실물 큐브로 전환
+                    final plannedIdx = _cubes.indexWhere((item) =>
+                        getCanonicalBaseIngredient(item.name) == baseName && item.isPlannedOnly);
+                    if (plannedIdx != -1) {
+                      _cubes[plannedIdx].name = baseName;
+                      _cubes[plannedIdx].unitWeight = w;
+                      _cubes[plannedIdx].quantity = q;
+                      _cubes[plannedIdx].madeDate = md;
+                      _cubes[plannedIdx].expireDate = md.add(Duration(days: sl));
+                      _cubes[plannedIdx].subOption = subOpt;
+                      _cubes[plannedIdx].isPlannedOnly = false;
+                    } else {
+                      _cubes.insert(
+                        0,
+                        CubeItem(
+                          id: DateTime.now().millisecondsSinceEpoch.toString(),
+                          name: baseName,
+                          category: c.category,
+                          unitWeight: w,
+                          quantity: q,
+                          madeDate: md,
+                          expireDate: md.add(Duration(days: sl)),
+                          subOption: subOpt,
+                          isPlannedOnly: false,
+                        ),
+                      );
+                    }
                   }
-                  _recordTriedIngredient(c.name, c.category, w);
+
+                  // 2) 예정된 식단 중 이 기본 재료를 사용하는 항목이 있다면 선택한 부위/배죽으로 동기화
+                  final newDisplayName = subOpt.isNotEmpty ? '$baseName($subOpt)' : baseName;
+                  final now = DateTime.now();
+                  final today = DateTime(now.year, now.month, now.day);
+                  for (var l in _mealLogs) {
+                    final logDay = DateTime(l.time.year, l.time.month, l.time.day);
+                    final isUpcoming = logDay.isAfter(today) || (logDay.isAtSameMomentAs(today) && l.isPlanned);
+                    if (isUpcoming) {
+                      for (int i = 0; i < l.ingredients.length; i++) {
+                        final ing = l.ingredients[i];
+                        if (getCanonicalBaseIngredient(ing) == baseName) {
+                          final match = RegExp(r'\s+(\d+g.*)$').firstMatch(ing);
+                          final suffix = match != null ? ' ${match.group(1)}' : ' ${w}g';
+                          l.ingredients[i] = '$newDisplayName$suffix';
+                        }
+                      }
+                    }
+                  }
+
+                  _recordTriedIngredient(baseName, c.category, w);
                 });
                 _saveData();
               },
@@ -3417,7 +3454,7 @@ class CubeStorageHubTab extends StatefulWidget {
   final Function(CubeItem, String, FoodCategory, int, int, DateTime, int, String) onEditCube;
   final Function(CubeItem) onDiscardCube;
   final Function(CubeItem) onDeleteCube;
-  final Function(CubeItem, int, int, DateTime, int) onRestock;
+  final Function(CubeItem, int, int, DateTime, int, String) onRestock;
   final Function(CubeItem, String, FoodCategory, int, String)? onEditPlannedTopping;
   final Function(CubeItem)? onDeletePlannedTopping;
 
@@ -3451,57 +3488,39 @@ class _CubeStorageHubTabState extends State<CubeStorageHubTab> {
       return logDay.isAfter(today) || (logDay.isAtSameMomentAs(today) && l.isPlanned);
     }).toList();
 
-    int count = 0;
-    Set<String> counted = {};
-
-    for (var cube in widget.cubes) {
-      if (cube.isPlannedOnly) {
-        if (!counted.contains(cube.name)) {
-          counted.add(cube.name);
-          count++;
-        }
-        continue;
-      }
-      // 재고 소진(0개) 또는 소비기한 만료
-      if (cube.quantity == 0 || cube.daysRemaining < 0) {
-        if (!counted.contains(cube.name)) {
-          counted.add(cube.name);
-          count++;
-        }
-        continue;
-      }
-      // 3개 이하 남은 큐브: 제작 필요 알림에 즉시 포함
-      if (cube.quantity <= 3) {
-        if (!counted.contains(cube.name)) {
-          counted.add(cube.name);
-          count++;
-        }
-        continue;
-      }
-      // 잔여 4개 이상이어도 예정된 식단에서 모두 소진되는 경우
-      int simulatedQty = cube.quantity;
-      for (var l in upcomingLogs) {
-        if (l.cubeUsage.containsKey(cube.id) || l.ingredients.any((ing) => ing.contains(cube.name))) {
-          simulatedQty -= (l.cubeUsage[cube.id] ?? 1);
-          if (simulatedQty < 1) {
-            if (!counted.contains(cube.name)) {
-              counted.add(cube.name);
-              count++;
-            }
-            break;
-          }
-        }
+    // 1. 모든 고유 대표 식재료(Canonical Base) 수집
+    Set<String> allBases = {};
+    for (var c in widget.cubes) {
+      final b = getCanonicalBaseIngredient(c.name);
+      if (b.isNotEmpty) allBases.add(b);
+    }
+    for (var l in upcomingLogs) {
+      for (var ing in l.ingredients) {
+        final b = getCanonicalBaseIngredient(ing);
+        if (b.isNotEmpty) allBases.add(b);
       }
     }
 
-    for (var l in upcomingLogs) {
-      for (var ing in l.ingredients) {
-        final match = RegExp(r'^(.+?)\s+(\d+)g').firstMatch(ing.trim());
-        if (match != null) {
-          final pName = match.group(1)!.trim();
-          if (!counted.contains(pName)) {
-            counted.add(pName);
-            count++;
+    int count = 0;
+    for (var base in allBases) {
+      final matchingCubes = widget.cubes.where((c) => getCanonicalBaseIngredient(c.name) == base).toList();
+      final totalOwnedQty = matchingCubes
+          .where((c) => !c.isPlannedOnly && c.daysRemaining >= 0)
+          .fold(0, (sum, c) => sum + c.quantity);
+
+      if (totalOwnedQty <= 3) {
+        count++;
+      } else {
+        // 잔여 4개 이상이어도 예정된 식단에서 모두 소진되는지 시뮬레이션
+        int simulated = totalOwnedQty;
+        for (var l in upcomingLogs) {
+          final uses = l.ingredients.where((ing) => getCanonicalBaseIngredient(ing) == base).length;
+          if (uses > 0) {
+            simulated -= uses;
+            if (simulated < 1) {
+              count++;
+              break;
+            }
           }
         }
       }
@@ -4358,7 +4377,7 @@ class RestockPlanTab extends StatefulWidget {
   final List<CubeItem> cubes;
   final List<MealLog> mealLogs;
   final List<TriedIngredient> triedIngredients;
-  final Function(CubeItem, int, int, DateTime, int) onRestock;
+  final Function(CubeItem, int, int, DateTime, int, String) onRestock;
   final Function(CubeItem, String, FoodCategory, int, String)? onEditPlannedTopping;
   final Function(CubeItem)? onDeletePlannedTopping;
 
@@ -4384,20 +4403,67 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
     final qtyCtrl = TextEditingController(text: '6');
     DateTime mDate = DateTime.now();
     int shelfDays = 14;
+    String selectedSubOption = c.subOption;
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text('${c.displayName} 제작 완료 등록', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          title: Text('${c.name} 제작 완료 등록', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(c.isPlannedOnly ? '식단 계획을 위해 등록했던 재료입니다. 제작 정보를 입력하면 보관함의 실물 큐브로 등록됩니다.' : '새로 제작한 정보를 입력하면 보관함 재고와 소비기한이 갱신됩니다.', style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+                Text(
+                  c.isPlannedOnly
+                      ? '식단 계획을 위해 등록했던 재료입니다. 제작 정보를 입력하면 보관함의 실물 큐브로 등록됩니다.'
+                      : '새로 제작한 정보를 입력하면 보관함 재고와 소비기한이 갱신됩니다.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                ),
                 const SizedBox(height: 12),
+                if (c.category == FoodCategory.meat) ...[
+                  Text('부위 옵션 (선택)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: kMeatCutOptions.map((opt) {
+                      final isSel = selectedSubOption == opt;
+                      return ChoiceChip(
+                        label: Text(opt, style: TextStyle(fontSize: 11, fontWeight: isSel ? FontWeight.bold : FontWeight.normal, color: isSel ? Colors.white : Colors.black87)),
+                        selected: isSel,
+                        selectedColor: appPrimaryColor,
+                        backgroundColor: const Color(0xFFF1F5F9),
+                        showCheckmark: false,
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+                        onSelected: (val) => setDState(() => selectedSubOption = val ? opt : ''),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 10),
+                ] else if (c.category == FoodCategory.grain) ...[
+                  Text('배죽 옵션 (선택)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: kGrainPorridgeOptions.map((opt) {
+                      final isSel = selectedSubOption == opt;
+                      return ChoiceChip(
+                        label: Text(opt, style: TextStyle(fontSize: 11, fontWeight: isSel ? FontWeight.bold : FontWeight.normal, color: isSel ? Colors.white : Colors.black87)),
+                        selected: isSel,
+                        selectedColor: appPrimaryColor,
+                        backgroundColor: const Color(0xFFF1F5F9),
+                        showCheckmark: false,
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+                        onSelected: (val) => setDState(() => selectedSubOption = val ? opt : ''),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 10),
+                ],
                 Row(
                   children: [
                     Expanded(child: TextField(controller: weightCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: '1개 용량 (g)'))),
@@ -4441,7 +4507,7 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
               onPressed: () {
                 final w = int.tryParse(weightCtrl.text) ?? c.unitWeight;
                 final q = int.tryParse(qtyCtrl.text) ?? 6;
-                widget.onRestock(c, w, q, mDate, shelfDays);
+                widget.onRestock(c, w, q, mDate, shelfDays, selectedSubOption);
                 Navigator.pop(ctx);
               },
               child: const Text('보관함에 반영'),
@@ -4578,7 +4644,7 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
 
   void _simulateBatchRestock(List<_PlanDisplayItem> items) {
     for (var item in items) {
-      widget.onRestock(item.cube, item.cube.unitWeight, 6, DateTime.now(), 14);
+      widget.onRestock(item.cube, item.cube.unitWeight, 6, DateTime.now(), 14, item.cube.subOption);
     }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -4625,52 +4691,67 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
       return isFutureDay || isTodayUncompleted;
     }).toList()..sort((a, b) => a.time.compareTo(b.time));
 
-    List<_PlanDisplayItem> items = [];
-    Set<String> processedNames = {};
+    // 1. 모든 고유 대표 식재료(Canonical Base) 수집
+    Set<String> allBases = {};
+    for (var c in widget.cubes) {
+      final b = getCanonicalBaseIngredient(c.name);
+      if (b.isNotEmpty) allBases.add(b);
+    }
+    for (var l in upcomingLogs) {
+      for (var ing in l.ingredients) {
+        final b = getCanonicalBaseIngredient(ing);
+        if (b.isNotEmpty) allBases.add(b);
+      }
+    }
 
-    for (var cube in widget.cubes) {
-      processedNames.add(cube.name);
+    List<_PlanDisplayItem> items = [];
+
+    for (var base in allBases) {
+      final matchingCubes = widget.cubes.where((c) => getCanonicalBaseIngredient(c.name) == base).toList();
+      final totalOwnedQty = matchingCubes
+          .where((c) => !c.isPlannedOnly && c.daysRemaining >= 0)
+          .fold(0, (sum, c) => sum + c.quantity);
 
       List<MealLog> matchedLogs = [];
       for (var l in upcomingLogs) {
-        final usesById = l.cubeUsage.containsKey(cube.id);
-        final usesByName = l.ingredients.any((ing) => ing.contains(cube.name));
-        if (usesById || usesByName) {
+        final usesByBase = l.ingredients.any((ing) => getCanonicalBaseIngredient(ing) == base);
+        final usesById = matchingCubes.any((c) => l.cubeUsage.containsKey(c.id));
+        if (usesByBase || usesById) {
           matchedLogs.add(l);
         }
       }
 
       final isFirst = !checkIsTriedIngredient(
-        name: cube.name,
+        name: base,
         triedIngredients: widget.triedIngredients,
         mealLogs: widget.mealLogs,
         cubes: widget.cubes,
       );
 
-      if (cube.isPlannedOnly) {
-        final targetDate = matchedLogs.isNotEmpty ? matchedLogs.first.time : null;
-        final dl = targetDate != null ? '${targetDate.month}월 ${targetDate.day}일' : '식단 전';
-        items.add(_PlanDisplayItem(
-          cube: cube,
-          urgency: '신규 필요',
-          deadline: dl,
-          color: appPrimaryColor,
-          score: targetDate != null ? targetDate.difference(today).inDays : 999,
-          isUnowned: true,
-          isFirstTry: isFirst,
-        ));
-        continue;
-      }
+      final category = matchingCubes.isNotEmpty ? matchingCubes.first.category : guessCategoryByName(base);
+      final defaultWeight = matchingCubes.isNotEmpty ? matchingCubes.first.unitWeight : 10;
+      final recentSubOption = matchingCubes.isNotEmpty ? matchingCubes.first.subOption : '';
 
-      final curQty = cube.quantity;
-      final isExpired = cube.daysRemaining < 0;
+      final representativeCube = CubeItem(
+        id: matchingCubes.isNotEmpty ? matchingCubes.first.id : 'virtual_${base}_${DateTime.now().millisecondsSinceEpoch}',
+        name: base,
+        category: category,
+        unitWeight: defaultWeight,
+        quantity: totalOwnedQty,
+        madeDate: DateTime.now(),
+        expireDate: DateTime.now().add(const Duration(days: 14)),
+        subOption: recentSubOption,
+        isPlannedOnly: totalOwnedQty == 0,
+      );
 
-      if (curQty == 0) {
+      if (totalOwnedQty == 0) {
         final nextUse = matchedLogs.isNotEmpty ? matchedLogs.first.time : null;
-        final dl = nextUse != null ? '${nextUse.month}월 ${nextUse.day}일' : '식단 예정 없음';
+        final dl = nextUse != null
+            ? '${nextUse.month}월 ${nextUse.day}일 식단 예정 (${defaultWeight}g 필요)'
+            : '식단 예정 없음';
         items.add(_PlanDisplayItem(
-          cube: cube,
-          urgency: '재고 소진',
+          cube: representativeCube,
+          urgency: matchingCubes.any((c) => !c.isPlannedOnly) ? '재고 소진' : '식단 예정',
           deadline: dl,
           color: const Color(0xFFE53935),
           score: nextUse != null ? nextUse.difference(today).inDays : 900,
@@ -4680,32 +4761,16 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
         continue;
       }
 
-      if (isExpired) {
-        final nextUse = matchedLogs.isNotEmpty ? matchedLogs.first.time : null;
-        final dl = nextUse != null ? '${nextUse.month}월 ${nextUse.day}일' : '소비기한 만료';
-        items.add(_PlanDisplayItem(
-          cube: cube,
-          urgency: '소비기한 만료',
-          deadline: dl,
-          color: const Color(0xFFE65100),
-          score: nextUse != null ? nextUse.difference(today).inDays : 100,
-          isUnowned: false,
-          isFirstTry: isFirst,
-        ));
-        continue;
-      }
-
-      // 3개 이하 남은 큐브: 예정된 식단 유무와 상관없이 무조건 제작 필요 목록에 포함!
-      if (curQty <= 3) {
-        int simulatedQty = curQty;
+      if (totalOwnedQty <= 3) {
+        int simulated = totalOwnedQty;
         DateTime? outOfStockDate;
         DateTime? nextUseDate = matchedLogs.isNotEmpty ? matchedLogs.first.time : null;
 
         for (var l in upcomingLogs) {
-          if (l.cubeUsage.containsKey(cube.id) || l.ingredients.any((ing) => ing.contains(cube.name))) {
-            int count = l.cubeUsage[cube.id] ?? 1;
-            simulatedQty -= count;
-            if (simulatedQty < 1) {
+          final count = l.ingredients.where((ing) => getCanonicalBaseIngredient(ing) == base).length;
+          if (count > 0) {
+            simulated -= count;
+            if (simulated < 1) {
               outOfStockDate = l.time;
               break;
             }
@@ -4713,14 +4778,14 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
         }
 
         final deadlineStr = outOfStockDate != null
-            ? '${outOfStockDate.month}월 ${outOfStockDate.day}일 소진 예정 (잔여 ${curQty}개)'
+            ? '${outOfStockDate.month}월 ${outOfStockDate.day}일 소진 예정 (보관함 잔여 ${totalOwnedQty}개)'
             : (nextUseDate != null
-                ? '${nextUseDate.month}월 ${nextUseDate.day}일 식단 예정 (잔여 ${curQty}개)'
-                : '보관함 잔여 ${curQty}개 (미리 제작 권장)');
+                ? '${nextUseDate.month}월 ${nextUseDate.day}일 식단 예정 (보관함 잔여 ${totalOwnedQty}개)'
+                : '보관함 잔여 ${totalOwnedQty}개 (미리 제작 권장)');
 
         items.add(_PlanDisplayItem(
-          cube: cube,
-          urgency: outOfStockDate != null ? '소진 임박' : '수량 부족 (잔여 ${curQty}개)',
+          cube: representativeCube,
+          urgency: outOfStockDate != null ? '소진 임박' : '수량 부족 (잔여 ${totalOwnedQty}개)',
           deadline: deadlineStr,
           color: outOfStockDate != null ? const Color(0xFFE53935) : const Color(0xFFF59F00),
           score: outOfStockDate != null
@@ -4732,14 +4797,14 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
         continue;
       }
 
-      // 잔여 4개 이상이어도 예정된 식단에서 소진되는 경우
-      int simulatedQty = curQty;
+      // totalOwnedQty > 3: check if upcoming logs deplete it
+      int simulated = totalOwnedQty;
       DateTime? outOfStockDate;
       for (var l in upcomingLogs) {
-        if (l.cubeUsage.containsKey(cube.id) || l.ingredients.any((ing) => ing.contains(cube.name))) {
-          int count = l.cubeUsage[cube.id] ?? 1;
-          simulatedQty -= count;
-          if (simulatedQty < 1) {
+        final count = l.ingredients.where((ing) => getCanonicalBaseIngredient(ing) == base).length;
+        if (count > 0) {
+          simulated -= count;
+          if (simulated < 1) {
             outOfStockDate = l.time;
             break;
           }
@@ -4747,64 +4812,14 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
       }
       if (outOfStockDate != null) {
         items.add(_PlanDisplayItem(
-          cube: cube,
+          cube: representativeCube,
           urgency: '소진 예정',
-          deadline: '${outOfStockDate.month}월 ${outOfStockDate.day}일 소진 예정 (잔여 ${curQty}개)',
+          deadline: '${outOfStockDate.month}월 ${outOfStockDate.day}일 소진 예정 (보관함 잔여 ${totalOwnedQty}개)',
           color: const Color(0xFFE53935),
           score: outOfStockDate.difference(today).inDays,
           isUnowned: false,
           isFirstTry: isFirst,
         ));
-      }
-    }
-
-    for (var l in upcomingLogs) {
-      for (var ingStr in l.ingredients) {
-        final match = RegExp(r'^(.+?)\s+(\d+)g').firstMatch(ingStr.trim());
-        if (match != null) {
-          final parsedName = match.group(1)!.trim();
-          if (!processedNames.contains(parsedName)) {
-            processedNames.add(parsedName);
-
-            final parsedGrams = int.tryParse(match.group(2)!) ?? 10;
-            final cntMatch = RegExp(r'\((\d+)개\)').firstMatch(ingStr);
-            final cnt = cntMatch != null ? (int.tryParse(cntMatch.group(1)!) ?? 1) : 1;
-            final unitW = cnt > 0 ? (parsedGrams ~/ cnt) : parsedGrams;
-
-            final triedInfo = widget.triedIngredients.firstWhere(
-              (t) => t.name == parsedName,
-              orElse: () => TriedIngredient(name: parsedName, category: guessCategoryByName(parsedName), lastUnitWeight: unitW),
-            );
-
-            final virtualCube = CubeItem(
-              id: 'virtual_${parsedName}_${l.time.millisecondsSinceEpoch}',
-              name: parsedName,
-              category: triedInfo.category,
-              unitWeight: unitW,
-              quantity: 0,
-              madeDate: DateTime.now(),
-              expireDate: DateTime.now().add(const Duration(days: 14)),
-              isPlannedOnly: true,
-            );
-
-            final isFirstVirtual = !checkIsTriedIngredient(
-              name: parsedName,
-              triedIngredients: widget.triedIngredients,
-              mealLogs: widget.mealLogs,
-              cubes: widget.cubes,
-            );
-
-            items.add(_PlanDisplayItem(
-              cube: virtualCube,
-              urgency: '식단 예정',
-              deadline: '${l.time.month}월 ${l.time.day}일',
-              color: appPrimaryColor,
-              score: l.time.difference(today).inDays,
-              isUnowned: true,
-              isFirstTry: isFirstVirtual,
-            ));
-          }
-        }
       }
     }
 
