@@ -2443,21 +2443,20 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
     List<String> news = [];
     final curDay = DateTime(log.time.year, log.time.month, log.time.day);
 
-    final past = widget.mealLogs.where((l) => DateTime(l.time.year, l.time.month, l.time.day).isBefore(curDay)).toList();
+    // 1) 이 식단 이전에 진행된 모든 식단의 재료 수집
+    final past = widget.mealLogs.where((l) {
+      final logDay = DateTime(l.time.year, l.time.month, l.time.day);
+      if (logDay.isBefore(curDay)) return true;
+      if (logDay.isAtSameMomentAs(curDay)) {
+        return l.mealType.index < log.mealType.index;
+      }
+      return false;
+    }).toList();
+
     Set<String> pastBases = {};
     for (var pl in past) {
       for (var ing in pl.ingredients) {
         final b = getCanonicalBaseIngredient(ing);
-        if (b.isNotEmpty) pastBases.add(b);
-      }
-    }
-    for (var t in widget.triedIngredients) {
-      final b = getCanonicalBaseIngredient(t.name);
-      if (b.isNotEmpty) pastBases.add(b);
-    }
-    for (var c in widget.cubes) {
-      if (!c.isPlannedOnly) {
-        final b = getCanonicalBaseIngredient(c.name);
         if (b.isNotEmpty) pastBases.add(b);
       }
     }
@@ -2906,7 +2905,9 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
             children: weekDays.map((d) {
               final isSelected = _isSameDay(d, _selectedDate);
               final isToday = _isSameDay(d, today);
-              final hasMeal = widget.mealLogs.any((l) => _isSameDay(l.time, d));
+              final dayLogs = widget.mealLogs.where((l) => _isSameDay(l.time, d)).toList();
+              final hasMeal = dayLogs.isNotEmpty;
+              final hasFirstTry = dayLogs.any((l) => _getNewIngredients(l).isNotEmpty);
               final weekdayName = _getKoreanWeekday(d);
 
               Color dayTextColor;
@@ -2954,13 +2955,13 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                         ),
                         const SizedBox(height: 3),
                         Container(
-                          width: 4,
-                          height: 4,
+                          width: 4.5,
+                          height: 4.5,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: isSelected
                                 ? Colors.white
-                                : (hasMeal ? appPrimaryColor : Colors.transparent),
+                                : (hasFirstTry ? const Color(0xFFF59F00) : (hasMeal ? appPrimaryColor : Colors.transparent)),
                           ),
                         ),
                       ],
@@ -2980,6 +2981,12 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
     final hasNew = news.isNotEmpty;
     final timeStr = '${l.time.hour.toString().padLeft(2, '0')}:${l.time.minute.toString().padLeft(2, '0')}';
 
+    final alertIngredients = widget.triedIngredients.where((t) {
+      if (!t.hasAlertReaction) return false;
+      final tBase = getCanonicalBaseIngredient(t.name);
+      return l.ingredients.any((ing) => getCanonicalBaseIngredient(ing) == tBase);
+    }).toList();
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       padding: const EdgeInsets.all(12),
@@ -2987,8 +2994,10 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: hasNew ? appPrimaryColor.withOpacity(0.5) : const Color(0xFFE2E8F0),
-          width: hasNew ? 1.5 : 1.0,
+          color: hasNew
+              ? const Color(0xFFF59E0B)
+              : (alertIngredients.isNotEmpty ? const Color(0xFFEF4444) : const Color(0xFFE2E8F0)),
+          width: (hasNew || alertIngredients.isNotEmpty) ? 1.5 : 1.0,
         ),
         boxShadow: const [
           BoxShadow(color: Color(0x06000000), blurRadius: 6, offset: Offset(0, 2)),
@@ -2997,61 +3006,75 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              if (hasNew)
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
-                      decoration: BoxDecoration(
-                        color: appPrimaryColor,
-                        borderRadius: BorderRadius.circular(14),
-                        boxShadow: [
-                          BoxShadow(color: appPrimaryColor.withOpacity(0.3), blurRadius: 3, offset: const Offset(0, 1)),
+          // 1. 처음 시도 알레르기 관찰 Warning 배너
+          if (hasNew) ...[
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF9DB),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFFFE066)),
+              ),
+              child: Row(
+                children: [
+                  const Text('⭐', style: TextStyle(fontSize: 12)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'NEW 첫 시도: ${news.map((e) => "${getFoodEmoji(e)} $e").join(", ")}',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFB45309)),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  InkWell(
+                    onTap: _showFirstTryGuideDialog,
+                    borderRadius: BorderRadius.circular(10),
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.info_outline, size: 14, color: Color(0xFFF59F00)),
+                          SizedBox(width: 2),
+                          Text('가이드', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFFB45309))),
                         ],
                       ),
-                      child: Text(
-                        '첫 시도: ${news.join(", ")}',
-                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
-                      ),
                     ),
-                    const SizedBox(width: 4),
-                    InkWell(
-                      onTap: _showFirstTryGuideDialog,
-                      borderRadius: BorderRadius.circular(10),
-                      child: Container(
-                        width: 18,
-                        height: 18,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(9),
-                        ),
-                        alignment: Alignment.center,
-                        child: const Text('ℹ', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF64748B))),
-                      ),
-                    ),
-                  ],
-                )
-              else
-                const SizedBox.shrink(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: appLightAccentColor,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: appPrimaryColor.withOpacity(0.3)),
-                ),
-                child: Text(
-                  '${l.totalGrams}g',
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: appTextColor),
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
-          if (hasNew) const SizedBox(height: 6),
+            ),
+          ],
 
+          if (alertIngredients.isNotEmpty) ...[
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEE2E2),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFFECACA)),
+              ),
+              child: Row(
+                children: [
+                  const Text('⚠️', style: TextStyle(fontSize: 12)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '알레르기 주의 이력: ${alertIngredients.map((a) => a.name).join(", ")} (${alertIngredients.first.lastReactionNote})',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFDC2626)),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // 2. 끼니 정보 및 상단 태그
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -3062,7 +3085,7 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                     height: 7,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: l.mealType.primaryColor,
+                      color: hasNew ? const Color(0xFFF59E0B) : l.mealType.primaryColor,
                     ),
                   ),
                   const SizedBox(width: 6),
@@ -3075,10 +3098,34 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                     '· $timeStr',
                     style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
                   ),
+                  if (hasNew) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF59E0B),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Text('첫 시도', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white)),
+                    ),
+                  ],
                 ],
               ),
               Row(
                 children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: appLightAccentColor,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: appPrimaryColor.withOpacity(0.3)),
+                    ),
+                    child: Text(
+                      '${l.totalGrams}g',
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: appTextColor),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
                   Text(
                     l.isPlanned ? '식단 예정' : '식사 완료',
                     style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: l.isPlanned ? const Color(0xFF94A3B8) : appTextColor),
@@ -3146,8 +3193,14 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
               children: [
                 Expanded(
                   child: Text(
-                    l.reaction.isEmpty ? '특이사항 없음' : l.reaction,
-                    style: const TextStyle(fontSize: 10.5, color: Color(0xFF94A3B8)),
+                    l.reaction.isEmpty
+                        ? (hasNew && l.isPlanned ? '반응 관찰 준비 완료' : '특이사항 없음')
+                        : l.reaction,
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      color: (hasNew && l.isPlanned && l.reaction.isEmpty) ? const Color(0xFFB45309) : const Color(0xFF94A3B8),
+                      fontWeight: (hasNew && l.isPlanned && l.reaction.isEmpty) ? FontWeight.bold : FontWeight.normal,
+                    ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -3402,20 +3455,40 @@ class _CubeStorageHubTabState extends State<CubeStorageHubTab> {
     Set<String> counted = {};
 
     for (var cube in widget.cubes) {
-      counted.add(cube.name);
-      if (cube.isPlannedOnly || cube.quantity == 0 || cube.daysRemaining < 0) {
-        count++;
+      if (cube.isPlannedOnly) {
+        if (!counted.contains(cube.name)) {
+          counted.add(cube.name);
+          count++;
+        }
         continue;
       }
+      // 재고 소진(0개) 또는 소비기한 만료
+      if (cube.quantity == 0 || cube.daysRemaining < 0) {
+        if (!counted.contains(cube.name)) {
+          counted.add(cube.name);
+          count++;
+        }
+        continue;
+      }
+      // 3개 이하 남은 큐브: 제작 필요 알림에 즉시 포함
       if (cube.quantity <= 3) {
-        int simulatedQty = cube.quantity;
-        for (var l in upcomingLogs) {
-          if (l.cubeUsage.containsKey(cube.id) || l.ingredients.any((ing) => ing.contains(cube.name))) {
-            simulatedQty -= (l.cubeUsage[cube.id] ?? 1);
-            if (simulatedQty < 1) {
+        if (!counted.contains(cube.name)) {
+          counted.add(cube.name);
+          count++;
+        }
+        continue;
+      }
+      // 잔여 4개 이상이어도 예정된 식단에서 모두 소진되는 경우
+      int simulatedQty = cube.quantity;
+      for (var l in upcomingLogs) {
+        if (l.cubeUsage.containsKey(cube.id) || l.ingredients.any((ing) => ing.contains(cube.name))) {
+          simulatedQty -= (l.cubeUsage[cube.id] ?? 1);
+          if (simulatedQty < 1) {
+            if (!counted.contains(cube.name)) {
+              counted.add(cube.name);
               count++;
-              break;
             }
+            break;
           }
         }
       }
@@ -3901,6 +3974,7 @@ class _CubeStockTabState extends State<CubeStockTab> {
   Widget _buildCubeGridCard(CubeItem c) {
     final isUnownedOrDiscarded = c.isPlannedOnly || c.quantity == 0;
     final isExpiring = !isUnownedOrDiscarded && c.daysRemaining >= 0 && c.daysRemaining <= 3;
+    final isLowStock = !isUnownedOrDiscarded && c.quantity <= 3;
     final emoji = getFoodEmoji(c.name);
 
     final totalDots = (c.quantity > 6) ? c.quantity : 6;
@@ -3912,13 +3986,13 @@ class _CubeStockTabState extends State<CubeStockTab> {
       child: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: isExpiring ? const Color(0xFFFFF5F5) : Colors.white,
+          color: isExpiring ? const Color(0xFFFFF5F5) : (isLowStock ? const Color(0xFFFFFBEB) : Colors.white),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
             color: isExpiring
                 ? const Color(0xFFFCA5A5)
-                : const Color(0xFFE2E8F0),
-            width: isExpiring ? 2.0 : 1.0,
+                : (isLowStock ? const Color(0xFFFDE68A) : const Color(0xFFE2E8F0)),
+            width: (isExpiring || isLowStock) ? 1.5 : 1.0,
           ),
           boxShadow: const [
             BoxShadow(color: Color(0x06000000), blurRadius: 4, offset: Offset(0, 1)),
@@ -3964,6 +4038,19 @@ class _CubeStockTabState extends State<CubeStockTab> {
                         child: Text(
                           '● ${c.dDayText} 임박',
                           style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFFDC2626)),
+                        ),
+                      )
+                    else if (isLowStock)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF3C7),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFFFDE68A)),
+                        ),
+                        child: Text(
+                          '⚠️ 잔여 ${c.quantity}개',
+                          style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFFB45309)),
                         ),
                       )
                     else if (c.subOption.isNotEmpty)
@@ -4608,9 +4695,11 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
         continue;
       }
 
+      // 3개 이하 남은 큐브: 예정된 식단 유무와 상관없이 무조건 제작 필요 목록에 포함!
       if (curQty <= 3) {
         int simulatedQty = curQty;
         DateTime? outOfStockDate;
+        DateTime? nextUseDate = matchedLogs.isNotEmpty ? matchedLogs.first.time : null;
 
         for (var l in upcomingLogs) {
           if (l.cubeUsage.containsKey(cube.id) || l.ingredients.any((ing) => ing.contains(cube.name))) {
@@ -4623,17 +4712,49 @@ class _RestockPlanTabState extends State<RestockPlanTab> {
           }
         }
 
-        if (outOfStockDate != null) {
-          items.add(_PlanDisplayItem(
-            cube: cube,
-            urgency: '소진 임박',
-            deadline: '${outOfStockDate.month}월 ${outOfStockDate.day}일',
-            color: const Color(0xFFE53935),
-            score: outOfStockDate.difference(today).inDays,
-            isUnowned: false,
-            isFirstTry: isFirst,
-          ));
+        final deadlineStr = outOfStockDate != null
+            ? '${outOfStockDate.month}월 ${outOfStockDate.day}일 소진 예정 (잔여 ${curQty}개)'
+            : (nextUseDate != null
+                ? '${nextUseDate.month}월 ${nextUseDate.day}일 식단 예정 (잔여 ${curQty}개)'
+                : '보관함 잔여 ${curQty}개 (미리 제작 권장)');
+
+        items.add(_PlanDisplayItem(
+          cube: cube,
+          urgency: outOfStockDate != null ? '소진 임박' : '수량 부족 (잔여 ${curQty}개)',
+          deadline: deadlineStr,
+          color: outOfStockDate != null ? const Color(0xFFE53935) : const Color(0xFFF59F00),
+          score: outOfStockDate != null
+              ? outOfStockDate.difference(today).inDays
+              : (nextUseDate != null ? nextUseDate.difference(today).inDays : 50),
+          isUnowned: false,
+          isFirstTry: isFirst,
+        ));
+        continue;
+      }
+
+      // 잔여 4개 이상이어도 예정된 식단에서 소진되는 경우
+      int simulatedQty = curQty;
+      DateTime? outOfStockDate;
+      for (var l in upcomingLogs) {
+        if (l.cubeUsage.containsKey(cube.id) || l.ingredients.any((ing) => ing.contains(cube.name))) {
+          int count = l.cubeUsage[cube.id] ?? 1;
+          simulatedQty -= count;
+          if (simulatedQty < 1) {
+            outOfStockDate = l.time;
+            break;
+          }
         }
+      }
+      if (outOfStockDate != null) {
+        items.add(_PlanDisplayItem(
+          cube: cube,
+          urgency: '소진 예정',
+          deadline: '${outOfStockDate.month}월 ${outOfStockDate.day}일 소진 예정 (잔여 ${curQty}개)',
+          color: const Color(0xFFE53935),
+          score: outOfStockDate.difference(today).inDays,
+          isUnowned: false,
+          isFirstTry: isFirst,
+        ));
       }
     }
 
