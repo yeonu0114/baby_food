@@ -265,6 +265,7 @@ class NutritionalConflict {
   final List<String> goodReplacementsFor1;
   final List<String> recommendedNewIngredients;
   final String tip;
+  final String? cookingNote;
 
   const NutritionalConflict({
     required this.ingredient1,
@@ -274,6 +275,7 @@ class NutritionalConflict {
     required this.goodReplacementsFor1,
     required this.recommendedNewIngredients,
     required this.tip,
+    this.cookingNote,
   });
 }
 
@@ -287,6 +289,7 @@ const List<NutritionalConflict> kNutritionalConflicts = [
     goodReplacementsFor1: ['브로콜리', '비타민채', '청경채', '애호박', '양배추', '콜리플라워'],
     recommendedNewIngredients: ['비타민채', '청경채', '파프리카'],
     tip: '소고기는 비타민 C가 풍부한 채소(브로콜리, 청경채)와 함께 먹으면 철분 흡수율이 3배 높아져요 🌱',
+    cookingNote: '시금치를 끓는 물에 살짝 데친 후 찬물에 헹궈 꼭 짜주면 수용성인 수산(옥살산)의 80% 이상이 물에 녹아 빠져나갑니다. 이렇게 손질한 시금치는 소고기 철분 흡수 방해 없이 안전하게 함께 먹일 수 있습니다.',
   ),
   NutritionalConflict(
     ingredient1: '소고기',
@@ -296,6 +299,7 @@ const List<NutritionalConflict> kNutritionalConflicts = [
     goodReplacementsFor1: ['애호박', '단호박', '브로콜리', '청경채'],
     recommendedNewIngredients: ['애호박', '단호박'],
     tip: '소고기에는 부드럽고 비타민이 풍부한 애호박이나 브로콜리를 곁들여보세요.',
+    cookingNote: '부추는 열을 가해도 질긴 섬유질이 남아 아기 장에 부담이 될 수 있으므로, 초기/중기에는 부드러운 애호박이나 브로콜리로 대체하는 것을 권장합니다.',
   ),
   NutritionalConflict(
     ingredient1: '소고기',
@@ -305,6 +309,7 @@ const List<NutritionalConflict> kNutritionalConflicts = [
     goodReplacementsFor1: ['감자', '단호박', '오트밀', '쌀죽'],
     recommendedNewIngredients: ['감자', '단호박'],
     tip: '소고기에는 소화가 편한 감자나 단호박이 잘 맞고, 고구마는 닭고기나 사과와 궁합이 좋아요 🍠',
+    cookingNote: '소화력이 약한 초기/중기에는 가스가 찰 수 있으나, 푹 쪄서 퓨레나 푹 익힌 밥으로 만들어 소량씩 함께 급여하면 큰 부담 없이 소화가 가능합니다.',
   ),
   NutritionalConflict(
     ingredient1: '소고기',
@@ -314,6 +319,7 @@ const List<NutritionalConflict> kNutritionalConflicts = [
     goodReplacementsFor1: ['감자', '단호박', '애호박'],
     recommendedNewIngredients: ['감자', '단호박'],
     tip: '소고기에는 감자나 단호박을 추천드려요.',
+    cookingNote: '밤을 푹 삶아 아주 곱게 으깨어 소량 곁들이면 소화 부담을 줄일 수 있으나, 가급적 감자나 단호박을 추천합니다.',
   ),
   NutritionalConflict(
     ingredient1: '두부',
@@ -323,6 +329,7 @@ const List<NutritionalConflict> kNutritionalConflicts = [
     goodReplacementsFor1: ['애호박', '당근', '버섯', '배추'],
     recommendedNewIngredients: ['애호박', '표고버섯'],
     tip: '두부는 애호박이나 배추, 버섯과 함께 조리하면 칼슘과 식감을 모두 살릴 수 있어요 🥣',
+    cookingNote: '시금치를 끓는 물에 살짝 데쳐 찬물에 헹구면 수산이 대부분 용출되므로, 데친 시금치를 두부와 함께 조리하시면 칼슘 손실 없이 안전합니다.',
   ),
   NutritionalConflict(
     ingredient1: '대두',
@@ -332,6 +339,7 @@ const List<NutritionalConflict> kNutritionalConflicts = [
     goodReplacementsFor1: ['애호박', '당근', '단호박'],
     recommendedNewIngredients: ['애호박'],
     tip: '콩류는 애호박이나 당근과 함께 먹는 것이 좋아요.',
+    cookingNote: '시금치를 끓는 물에 데쳐 찬물에 헹군 후 꼭 짜서 조리하면 수산이 제거되어 안전하게 함께 섭취할 수 있습니다.',
   ),
   NutritionalConflict(
     ingredient1: '당근',
@@ -341,6 +349,7 @@ const List<NutritionalConflict> kNutritionalConflicts = [
     goodReplacementsFor1: ['애호박', '단호박', '브로콜리', '양배추'],
     recommendedNewIngredients: ['애호박', '브로콜리'],
     tip: '당근과 오이는 서로 다른 끼니로 나누어 급여하거나 애호박으로 대체해보세요 🥒',
+    cookingNote: '당근의 비타민 C 분해 효소(아스코르비나아제)는 열에 매우 약해 푹 삶거나 찌는 이유식 조리 과정을 거치면 완전히 파괴(불활성화)됩니다. 따라서 푹 익혀 만든 이유식에서는 비타민 C 파괴 염려 없이 안심하고 함께 먹이셔도 좋습니다!',
   ),
   NutritionalConflict(
     ingredient1: '당근',
@@ -350,6 +359,7 @@ const List<NutritionalConflict> kNutritionalConflicts = [
     goodReplacementsFor1: ['애호박', '단호박', '양배추'],
     recommendedNewIngredients: ['애호박', '양배추'],
     tip: '당근과 무는 같은 끼니보다 다른 끼니로 분리 급여하는 것을 권장해요.',
+    cookingNote: '당근의 아스코르비나아제 효소는 가열 조리 시 파괴되므로, 푹 삶거나 찐 이유식에서는 무의 비타민 C가 안전하게 보호되어 함께 먹여도 괜찮습니다.',
   ),
   NutritionalConflict(
     ingredient1: '닭고기',
@@ -359,6 +369,7 @@ const List<NutritionalConflict> kNutritionalConflicts = [
     goodReplacementsFor1: ['사과', '바나나', '단호박', '고구마'],
     recommendedNewIngredients: ['사과', '단호박'],
     tip: '닭고기는 단호박, 고구마, 사과와 함께 먹이면 단백질 흡수와 소화가 아주 잘 돼요 🍎',
+    cookingNote: '자두의 산 성분은 가열해도 유지되므로, 자두는 닭고기 식단과 2~3시간 이상 간격을 두고 단독 간식으로 급여하는 것이 좋습니다.',
   ),
   NutritionalConflict(
     ingredient1: '바나나',
@@ -368,17 +379,21 @@ const List<NutritionalConflict> kNutritionalConflicts = [
     goodReplacementsFor1: ['사과', '배', '오이', '애호박'],
     recommendedNewIngredients: ['사과', '배'],
     tip: '고구마에는 상큼한 사과를, 바나나는 오트밀이나 쌀죽과 조합하는 것이 좋아요 🍌',
+    cookingNote: '둘 다 전분 함량이 높아 가스가 찰 수 있으므로, 한 끼에 동시에 급여하기보다는 고구마는 식단으로, 바나나는 오후 간식으로 분리 급여하시는 것을 추천합니다.',
   ),
 ];
 
-/// 식재료 리스트에서 상극 궁합이 있는지 판별
+/// 식재료 리스트에서 상극 궁합이 있는지 판별 (시금치 등 공백 오탐 완벽 수정)
 NutritionalConflict? checkNutritionalConflict(Iterable<String> ingredientNames) {
-  final canonicalList = ingredientNames.map((n) => getCanonicalBaseIngredient(n)).toSet();
+  final canonicalList = ingredientNames
+      .map((n) => getCanonicalBaseIngredient(n).trim())
+      .where((n) => n.isNotEmpty)
+      .toSet();
   for (var conflict in kNutritionalConflicts) {
     final base1 = getCanonicalBaseIngredient(conflict.ingredient1);
     final base2 = getCanonicalBaseIngredient(conflict.ingredient2);
-    final has1 = canonicalList.any((c) => c.contains(base1) || base1.contains(c));
-    final has2 = canonicalList.any((c) => c.contains(base2) || base2.contains(c));
+    final has1 = canonicalList.contains(base1);
+    final has2 = canonicalList.contains(base2);
     if (has1 && has2) {
       return conflict;
     }
@@ -420,6 +435,7 @@ class TriedIngredient {
   int lastUnitWeight;
   String lastReactionNote;
   bool hasAlertReaction;
+  List<String> subOptions;
 
   TriedIngredient({
     required this.name,
@@ -427,7 +443,8 @@ class TriedIngredient {
     required this.lastUnitWeight,
     this.lastReactionNote = '특이사항 없음',
     this.hasAlertReaction = false,
-  });
+    List<String>? subOptions,
+  }) : subOptions = subOptions ?? [];
 
   Map<String, dynamic> toJson() => {
         'name': name,
@@ -435,15 +452,29 @@ class TriedIngredient {
         'lastUnitWeight': lastUnitWeight,
         'lastReactionNote': lastReactionNote,
         'hasAlertReaction': hasAlertReaction,
+        'subOptions': subOptions,
       };
 
-  factory TriedIngredient.fromJson(Map<String, dynamic> j) => TriedIngredient(
-        name: j['name'],
-        category: FoodCategory.fromLabel(j['category']),
-        lastUnitWeight: j['lastUnitWeight'] ?? 10,
-        lastReactionNote: j['lastReactionNote'] ?? '특이사항 없음',
-        hasAlertReaction: j['hasAlertReaction'] ?? false,
-      );
+  factory TriedIngredient.fromJson(Map<String, dynamic> j) {
+    var rawName = j['name'] as String;
+    List<String> subs = List<String>.from(j['subOptions'] ?? []);
+    final match = RegExp(r'^(.*?)\((.*?)\)$').firstMatch(rawName.trim());
+    if (match != null) {
+      rawName = match.group(1)!.trim();
+      final opt = match.group(2)!.trim();
+      if (opt.isNotEmpty && !subs.contains(opt)) subs.add(opt);
+    }
+    final base = getCanonicalBaseIngredient(rawName);
+    final displayName = (base == '쌀') ? '쌀죽' : base;
+    return TriedIngredient(
+      name: displayName,
+      category: FoodCategory.fromLabel(j['category']),
+      lastUnitWeight: j['lastUnitWeight'] ?? 10,
+      lastReactionNote: j['lastReactionNote'] ?? '특이사항 없음',
+      hasAlertReaction: j['hasAlertReaction'] ?? false,
+      subOptions: subs,
+    );
+  }
 }
 
 class CubeItem {
@@ -517,18 +548,27 @@ class CubeItem {
         'createdAt': createdAt,
       };
 
-  factory CubeItem.fromJson(Map<String, dynamic> j) => CubeItem(
-        id: j['id'],
-        name: j['name'],
-        category: FoodCategory.fromLabel(j['category']),
-        unitWeight: j['unitWeight'],
-        quantity: j['quantity'],
-        madeDate: DateTime.parse(j['madeDate']),
-        expireDate: DateTime.parse(j['expireDate']),
-        subOption: j['subOption'] ?? '',
-        isPlannedOnly: j['isPlannedOnly'] ?? false,
-        createdAt: j['createdAt'],
-      );
+  factory CubeItem.fromJson(Map<String, dynamic> j) {
+    var rawName = j['name'] as String;
+    var subOpt = (j['subOption'] as String?) ?? '';
+    final match = RegExp(r'^(.*?)\((.*?)\)$').firstMatch(rawName.trim());
+    if (match != null && subOpt.isEmpty) {
+      rawName = match.group(1)!.trim();
+      subOpt = match.group(2)!.trim();
+    }
+    return CubeItem(
+      id: j['id'],
+      name: rawName,
+      category: FoodCategory.fromLabel(j['category']),
+      unitWeight: j['unitWeight'],
+      quantity: j['quantity'],
+      madeDate: DateTime.parse(j['madeDate']),
+      expireDate: DateTime.parse(j['expireDate']),
+      subOption: subOpt,
+      isPlannedOnly: j['isPlannedOnly'] ?? false,
+      createdAt: j['createdAt'],
+    );
+  }
 }
 
 class MealLog {
@@ -541,6 +581,7 @@ class MealLog {
   String reaction;
   bool isPlanned;
   String? allergyTestItem;
+  String? allergyTestStatus; // 'passed', 'observing', 'caution'
 
   MealLog({
     required this.id,
@@ -552,6 +593,7 @@ class MealLog {
     required this.reaction,
     required this.isPlanned,
     this.allergyTestItem,
+    this.allergyTestStatus,
   });
 
   Map<String, dynamic> toJson() => {
@@ -564,6 +606,7 @@ class MealLog {
         'reaction': reaction,
         'isPlanned': isPlanned,
         if (allergyTestItem != null) 'allergyTestItem': allergyTestItem,
+        if (allergyTestStatus != null) 'allergyTestStatus': allergyTestStatus,
       };
 
   factory MealLog.fromJson(Map<String, dynamic> j) => MealLog(
@@ -576,6 +619,7 @@ class MealLog {
         reaction: j['reaction'],
         isPlanned: j['isPlanned'] ?? false,
         allergyTestItem: j['allergyTestItem'],
+        allergyTestStatus: j['allergyTestStatus'],
       );
 }
 
@@ -740,6 +784,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     }
 
     _syncTriedIngredients();
+    _consolidateTriedIngredients();
 
     _birthDate = bs != null ? DateTime.parse(bs) : DateTime.now().subtract(const Duration(days: 182));
     _weaningStartDate = ws != null ? DateTime.parse(ws) : DateTime.now().subtract(const Duration(days: 32));
@@ -753,41 +798,84 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     return text.contains('붉어짐') || text.contains('두드러기') || text.contains('발진') || text.contains('가려움') || text.contains('설사') || text.contains('뱉어냄');
   }
 
-  void _recordTriedIngredient(String name, FoodCategory category, int unitWeight, {String? reaction}) {
+  void _consolidateTriedIngredients() {
+    final Map<String, TriedIngredient> map = {};
+    for (var t in _triedIngredients) {
+      final base = getCanonicalBaseIngredient(t.name);
+      final optMatch = RegExp(r'\((.*?)\)').firstMatch(t.name);
+      final opt = optMatch != null ? optMatch.group(1)!.trim() : '';
+      final displayName = (base == '쌀') ? '쌀죽' : base;
+
+      if (!map.containsKey(base)) {
+        final List<String> subs = List<String>.from(t.subOptions);
+        if (opt.isNotEmpty && !subs.contains(opt)) subs.add(opt);
+        map[base] = TriedIngredient(
+          name: displayName,
+          category: t.category,
+          lastUnitWeight: t.lastUnitWeight,
+          lastReactionNote: t.lastReactionNote,
+          hasAlertReaction: t.hasAlertReaction,
+          subOptions: subs,
+        );
+      } else {
+        final existing = map[base]!;
+        if (t.hasAlertReaction) existing.hasAlertReaction = true;
+        if (t.lastReactionNote != '특이사항 없음') existing.lastReactionNote = t.lastReactionNote;
+        if (opt.isNotEmpty && !existing.subOptions.contains(opt)) {
+          existing.subOptions.add(opt);
+        }
+        for (var sub in t.subOptions) {
+          if (!existing.subOptions.contains(sub)) existing.subOptions.add(sub);
+        }
+      }
+    }
+    _triedIngredients = map.values.toList();
+  }
+
+  void _recordTriedIngredient(String name, FoodCategory category, int unitWeight, {String? reaction, String? subOption}) {
     final cleanName = name.trim();
     if (cleanName.isEmpty) return;
 
     final baseName = getCanonicalBaseIngredient(cleanName);
-    final targetNames = {cleanName, baseName};
+    final displayName = (baseName == '쌀') ? '쌀죽' : baseName;
 
-    for (var n in targetNames) {
-      if (n.isEmpty) continue;
-      final idx = _triedIngredients.indexWhere((t) => t.name == n || getCanonicalBaseIngredient(t.name) == baseName);
-      final hasAlert = reaction != null && _isAlertReaction(reaction);
+    String opt = subOption?.trim() ?? '';
+    if (opt.isEmpty) {
+      final optMatch = RegExp(r'\((.*?)\)').firstMatch(cleanName);
+      if (optMatch != null) opt = optMatch.group(1)!.trim();
+    }
 
-      if (idx != -1) {
-        _triedIngredients[idx].category = category;
-        _triedIngredients[idx].lastUnitWeight = unitWeight;
-        if (reaction != null && reaction.isNotEmpty && !reaction.contains('계획') && !reaction.contains('예정')) {
-          _triedIngredients[idx].lastReactionNote = reaction;
-          if (hasAlert) _triedIngredients[idx].hasAlertReaction = true;
-        }
-      } else {
-        _triedIngredients.add(TriedIngredient(
-          name: n,
-          category: category,
-          lastUnitWeight: unitWeight,
-          lastReactionNote: (reaction != null && reaction.isNotEmpty && !reaction.contains('계획')) ? reaction : '특이사항 없음',
-          hasAlertReaction: hasAlert,
-        ));
+    final idx = _triedIngredients.indexWhere((t) => getCanonicalBaseIngredient(t.name) == baseName);
+    final hasAlert = reaction != null && _isAlertReaction(reaction);
+
+    if (idx != -1) {
+      final t = _triedIngredients[idx];
+      t.name = displayName;
+      t.category = category;
+      t.lastUnitWeight = unitWeight;
+      if (opt.isNotEmpty && !t.subOptions.contains(opt)) {
+        t.subOptions.add(opt);
       }
+      if (reaction != null && reaction.isNotEmpty && !reaction.contains('계획') && !reaction.contains('예정')) {
+        t.lastReactionNote = reaction;
+        if (hasAlert) t.hasAlertReaction = true;
+      }
+    } else {
+      _triedIngredients.add(TriedIngredient(
+        name: displayName,
+        category: category,
+        lastUnitWeight: unitWeight,
+        lastReactionNote: (reaction != null && reaction.isNotEmpty && !reaction.contains('계획')) ? reaction : '특이사항 없음',
+        hasAlertReaction: hasAlert,
+        subOptions: opt.isNotEmpty ? [opt] : [],
+      ));
     }
   }
 
   void _syncTriedIngredients() {
     for (var c in _cubes) {
       if (!c.isPlannedOnly) {
-        _recordTriedIngredient(c.name, c.category, c.unitWeight);
+        _recordTriedIngredient(c.name, c.category, c.unitWeight, subOption: c.subOption);
       }
     }
     for (var m in _mealLogs) {
@@ -810,6 +898,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             existingCube.category,
             unitW,
             reaction: m.isPlanned ? null : m.reaction,
+            subOption: existingCube.subOption,
           );
         }
       }
@@ -1650,6 +1739,27 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 });
                 _saveData();
               },
+              onUpdateAllergyResult: (l, status, note) {
+                setState(() {
+                  l.allergyTestStatus = status;
+                  if (note.isNotEmpty) l.reaction = note;
+                  final allergen = getAllergyTestItemFromMeal(l);
+                  if (allergen != null && allergen.isNotEmpty) {
+                    final base = getCanonicalBaseIngredient(allergen);
+                    final cat = guessCategoryByName(base);
+                    if (status == 'passed') {
+                      _recordTriedIngredient(allergen, cat, 10, reaction: '알레르기 테스트 통과');
+                      final idx = _triedIngredients.indexWhere((t) => t.name == allergen || getCanonicalBaseIngredient(t.name) == base);
+                      if (idx != -1) _triedIngredients[idx].hasAlertReaction = false;
+                    } else if (status == 'caution') {
+                      _recordTriedIngredient(allergen, cat, 10, reaction: '알레르기 반응 주의: $note');
+                      final idx = _triedIngredients.indexWhere((t) => t.name == allergen || getCanonicalBaseIngredient(t.name) == base);
+                      if (idx != -1) _triedIngredients[idx].hasAlertReaction = true;
+                    }
+                  }
+                });
+                _saveData();
+              },
             ),
             CubeStorageHubTab(
               cubes: _cubes,
@@ -1890,28 +2000,52 @@ class _MealLogTabState extends State<MealLogTab> {
                     separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
                     itemBuilder: (context, idx) {
                       final item = sortedTried[idx];
-                      final existingCubeIdx = widget.cubes.indexWhere((c) => c.name == item.name);
-                      final hasStock = existingCubeIdx != -1 && widget.cubes[existingCubeIdx].quantity > 0;
+                      final itemBase = getCanonicalBaseIngredient(item.name);
+                      final matchingCubes = widget.cubes.where((c) => getCanonicalBaseIngredient(c.name) == itemBase && !c.isPlannedOnly).toList();
+                      final totalStock = matchingCubes.fold(0, (sum, c) => sum + c.quantity);
+                      final hasStock = totalStock > 0;
 
                       return ListTile(
                         contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                         leading: Text(getFoodEmoji(item.name), style: const TextStyle(fontSize: 22)),
-                        title: Row(
+                        title: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                            const SizedBox(width: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                              decoration: BoxDecoration(color: item.category.bgColor, borderRadius: BorderRadius.circular(6)),
-                              child: Text(item.category.label, style: TextStyle(fontSize: 9.5, color: item.category.textColor, fontWeight: FontWeight.bold)),
+                            Row(
+                              children: [
+                                Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                  decoration: BoxDecoration(color: item.category.bgColor, borderRadius: BorderRadius.circular(6)),
+                                  child: Text(item.category.label, style: TextStyle(fontSize: 9.5, color: item.category.textColor, fontWeight: FontWeight.bold)),
+                                ),
+                              ],
                             ),
+                            if (item.subOptions.isNotEmpty) ...[
+                              const SizedBox(height: 3),
+                              Wrap(
+                                spacing: 4,
+                                runSpacing: 2,
+                                children: item.subOptions.map((opt) => Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF1F5F9),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: const Color(0xFFCBD5E1)),
+                                  ),
+                                  child: Text(opt, style: const TextStyle(fontSize: 9.5, color: Color(0xFF475569), fontWeight: FontWeight.w600)),
+                                )).toList(),
+                              ),
+                            ],
                           ],
                         ),
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            const SizedBox(height: 2),
                             Text(
-                              '기존 용량 ${item.lastUnitWeight}g · ${hasStock ? "보관함 잔여 (${widget.cubes[existingCubeIdx].quantity}개)" : "현재 재고 없음"}',
+                              '기존 용량 ${item.lastUnitWeight}g · ${hasStock ? "보관함 잔여 ($totalStock개)" : "현재 재고 없음"}',
                               style: TextStyle(fontSize: 11, color: hasStock ? appPrimaryColor : const Color(0xFFE53935), fontWeight: FontWeight.w600),
                             ),
                             Text(
@@ -1930,9 +2064,9 @@ class _MealLogTabState extends State<MealLogTab> {
                             padding: const EdgeInsets.symmetric(horizontal: 10),
                           ),
                           onPressed: () {
-                            if (existingCubeIdx != -1) {
-                              final c = widget.cubes[existingCubeIdx];
-                              setState(() => _selectedQuantities[c.id] = (_selectedQuantities[c.id] ?? 0) + 1);
+                            if (matchingCubes.isNotEmpty) {
+                              final withStock = matchingCubes.firstWhere((c) => c.quantity > 0, orElse: () => matchingCubes.first);
+                              setState(() => _selectedQuantities[withStock.id] = (_selectedQuantities[withStock.id] ?? 0) + 1);
                             } else {
                               final restoredCube = CubeItem(
                                 id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -3009,6 +3143,7 @@ class MealCalendarTab extends StatefulWidget {
   final Function(MealLog) onDeleteMeal;
   final Function(MealLog) onCompleteMeal;
   final Function(MealLog, String) onUpdateReaction;
+  final Function(MealLog, String, String)? onUpdateAllergyResult;
 
   const MealCalendarTab({
     super.key,
@@ -3023,6 +3158,7 @@ class MealCalendarTab extends StatefulWidget {
     required this.onDeleteMeal,
     required this.onCompleteMeal,
     required this.onUpdateReaction,
+    this.onUpdateAllergyResult,
   });
 
   @override
@@ -3174,6 +3310,33 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                   Text(conflict.title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF92400E))),
                   const SizedBox(height: 3),
                   Text(conflict.reason, style: const TextStyle(fontSize: 11.5, height: 1.35, color: Color(0xFF78350F))),
+                  if (conflict.cookingNote != null) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF0FDF4),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFBBF7D0)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Row(
+                            children: [
+                              Text('🍳 ', style: TextStyle(fontSize: 12)),
+                              Text('[이유식 안심 조리 팁] 푹 삶거나 데치면 괜찮아요!', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF15803D))),
+                            ],
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            conflict.cookingNote!,
+                            style: const TextStyle(fontSize: 10.5, color: Color(0xFF166534), height: 1.35),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 6),
                   Text('💡 ${conflict.tip}', style: const TextStyle(fontSize: 11, color: Color(0xFFB45309))),
                 ],
@@ -3474,6 +3637,189 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
             child: const Text('저장'),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showAllergyResultDialog(MealLog log, String allergen) {
+    String selectedStatus = log.allergyTestStatus ?? 'passed';
+    final memoCtrl = TextEditingController(text: log.reaction == '특이사항 없음' ? '' : log.reaction);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              const Text('🌾', style: TextStyle(fontSize: 20)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text('$allergen 알레르기 반응 기록', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '테스트 결과를 선택해주세요. 통과 시 안심 식재료로 자동 등록됩니다.',
+                  style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                ),
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: () => setDState(() => selectedStatus = 'passed'),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: selectedStatus == 'passed' ? const Color(0xFFF0FDF4) : Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: selectedStatus == 'passed' ? const Color(0xFF22C55E) : const Color(0xFFE2E8F0),
+                        width: selectedStatus == 'passed' ? 2 : 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Text('✅', style: TextStyle(fontSize: 16)),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('통과 (이상 없음)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF15803D))),
+                              Text('특이 증상 없음 · 안심 식재료로 자동 등록', style: TextStyle(fontSize: 10, color: Color(0xFF16A34A))),
+                            ],
+                          ),
+                        ),
+                        if (selectedStatus == 'passed')
+                          const Icon(Icons.check_circle, color: Color(0xFF22C55E), size: 18),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                InkWell(
+                  onTap: () => setDState(() => selectedStatus = 'observing'),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: selectedStatus == 'observing' ? const Color(0xFFFFFBEB) : Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: selectedStatus == 'observing' ? const Color(0xFFF59E0B) : const Color(0xFFE2E8F0),
+                        width: selectedStatus == 'observing' ? 2 : 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Text('⚠️', style: TextStyle(fontSize: 16)),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('반응 관찰 중 (24~48시간)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFB45309))),
+                              Text('아직 관찰 기간 진행 중 · 상태 주시 필요', style: TextStyle(fontSize: 10, color: Color(0xFFD97706))),
+                            ],
+                          ),
+                        ),
+                        if (selectedStatus == 'observing')
+                          const Icon(Icons.check_circle, color: Color(0xFFF59E0B), size: 18),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                InkWell(
+                  onTap: () => setDState(() => selectedStatus = 'caution'),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: selectedStatus == 'caution' ? const Color(0xFFFFF1F2) : Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: selectedStatus == 'caution' ? const Color(0xFFE11D48) : const Color(0xFFE2E8F0),
+                        width: selectedStatus == 'caution' ? 2 : 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Text('❌', style: TextStyle(fontSize: 16)),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('알러지 반응 발생 (주의)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFBE123C))),
+                              Text('붉어짐/두드러기 등 발생 · 향후 식단 시 주의 경고', style: TextStyle(fontSize: 10, color: Color(0xFFE11D48))),
+                            ],
+                          ),
+                        ),
+                        if (selectedStatus == 'caution')
+                          const Icon(Icons.check_circle, color: Color(0xFFE11D48), size: 18),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text('빠른 증상 입력 (선택)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 4,
+                  runSpacing: 4,
+                  children: ['입주변 붉어짐', '두드러기/발진', '눈 비빔/가려움', '변 묽음/설사', '구토', '특이사항 없음'].map((t) => ActionChip(
+                    label: Text(t, style: const TextStyle(fontSize: 10.5)),
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () {
+                      setDState(() {
+                        if (memoCtrl.text.isEmpty) {
+                          memoCtrl.text = t;
+                        } else if (!memoCtrl.text.contains(t)) {
+                          memoCtrl.text = '${memoCtrl.text}, $t';
+                        }
+                      });
+                    },
+                  )).toList(),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: memoCtrl,
+                  decoration: const InputDecoration(
+                    labelText: '상세 메모 (선택)',
+                    hintText: '식후 2시간 뒤 이상 없음 등',
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  ),
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('취소')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: selectedStatus == 'caution'
+                    ? const Color(0xFFE11D48)
+                    : (selectedStatus == 'observing' ? const Color(0xFFF59E0B) : const Color(0xFF16A34A)),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () {
+                Navigator.pop(ctx);
+                widget.onUpdateAllergyResult?.call(log, selectedStatus, memoCtrl.text.trim());
+              },
+              child: const Text('저장 완료'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -3815,56 +4161,88 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. 알레르기 테스트 집중 관찰 배너
+          // 1. 알레르기 테스트 컴팩트 1줄 배너 (클릭 시 전용 팝업)
           if (allergyItem != null) ...[
             Container(
               width: double.infinity,
               margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: const Color(0xFFF5F3FF),
+                color: l.allergyTestStatus == 'passed'
+                    ? const Color(0xFFF0FDF4)
+                    : (l.allergyTestStatus == 'caution'
+                        ? const Color(0xFFFFF1F2)
+                        : const Color(0xFFF5F3FF)),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFDDD6FE)),
+                border: Border.all(
+                  color: l.allergyTestStatus == 'passed'
+                      ? const Color(0xFFBBF7D0)
+                      : (l.allergyTestStatus == 'caution'
+                          ? const Color(0xFFFECDD3)
+                          : const Color(0xFFDDD6FE)),
+                ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
                 children: [
-                  Row(
-                    children: [
-                      const Text('🧪', style: TextStyle(fontSize: 13)),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          '알레르기 테스트: $allergyItem',
-                          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF6D28D9)),
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF7C3AED),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Text('집중 관찰', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.white)),
-                      ),
-                    ],
+                  Text(
+                    l.allergyTestStatus == 'passed'
+                        ? '✅'
+                        : (l.allergyTestStatus == 'caution' ? '❌' : '🌾'),
+                    style: const TextStyle(fontSize: 12),
                   ),
-                  const SizedBox(height: 3),
-                  const Text(
-                    '⚠️ 급여 후 2~3시간 동안 입 주변 발진, 붓기, 구토, 호흡 이상 여부를 세심하게 살펴주세요.',
-                    style: TextStyle(fontSize: 10, color: Color(0xFF5B21B6), height: 1.3),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      '알레르기 테스트: $allergyItem',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: l.allergyTestStatus == 'passed'
+                            ? const Color(0xFF15803D)
+                            : (l.allergyTestStatus == 'caution'
+                                ? const Color(0xFFBE123C)
+                                : const Color(0xFF6D28D9)),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  InkWell(
+                    onTap: () => _showAllergyResultDialog(l, allergyItem),
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                      decoration: BoxDecoration(
+                        color: l.allergyTestStatus == 'passed'
+                            ? const Color(0xFF16A34A)
+                            : (l.allergyTestStatus == 'caution'
+                                ? const Color(0xFFE11D48)
+                                : (l.allergyTestStatus == 'observing'
+                                    ? const Color(0xFFF59E0B)
+                                    : const Color(0xFF7C3AED))),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        l.allergyTestStatus == 'passed'
+                            ? '통과 (안심)'
+                            : (l.allergyTestStatus == 'caution'
+                                ? '반응 주의'
+                                : (l.allergyTestStatus == 'observing' ? '관찰 중' : '결과 기록')),
+                        style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
           ],
 
-          // 2. 영양 궁합 주의 배너
+          // 2. 영양 궁합 주의 1줄 배너 (클릭 시 [ℹ️ 팁 보기] 안심 조리법 팝업)
           if (conflict != null) ...[
             Container(
               width: double.infinity,
               margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: const Color(0xFFFFFBEB),
                 borderRadius: BorderRadius.circular(10),
@@ -3875,19 +4253,10 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                   const Text('⚠️', style: TextStyle(fontSize: 12)),
                   const SizedBox(width: 6),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '영양 궁합 주의: ${conflict.title}',
-                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFB45309)),
-                        ),
-                        const SizedBox(height: 1),
-                        Text(
-                          conflict.reason,
-                          style: const TextStyle(fontSize: 10, color: Color(0xFF92400E)),
-                        ),
-                      ],
+                    child: Text(
+                      '궁합 주의: ${conflict.title} (삶거나 데치면 안심!)',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFB45309)),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   const SizedBox(width: 4),
@@ -3895,12 +4264,18 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                     onTap: () => _showConflictSolutionDialog(l, conflict),
                     borderRadius: BorderRadius.circular(6),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
                       decoration: BoxDecoration(
                         color: const Color(0xFFF59E0B),
                         borderRadius: BorderRadius.circular(6),
                       ),
-                      child: const Text('대체 제안', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.white)),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('ℹ️ ', style: TextStyle(fontSize: 9)),
+                          Text('팁 보기', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.white)),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -4146,6 +4521,54 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                         child: const Text('반응 기록', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF475569))),
                       ),
                     ),
+                    if (allergyItem != null) ...[
+                      const SizedBox(width: 6),
+                      InkWell(
+                        onTap: () => _showAllergyResultDialog(l, allergyItem),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: l.allergyTestStatus == 'passed'
+                                ? const Color(0xFFDCFCE7)
+                                : (l.allergyTestStatus == 'caution'
+                                    ? const Color(0xFFFFE4E6)
+                                    : const Color(0xFFFEF3C7)),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: l.allergyTestStatus == 'passed'
+                                  ? const Color(0xFF86EFAC)
+                                  : (l.allergyTestStatus == 'caution'
+                                      ? const Color(0xFFFDA4AF)
+                                      : const Color(0xFFFCD34D)),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                l.allergyTestStatus == 'passed'
+                                    ? '✅ '
+                                    : (l.allergyTestStatus == 'caution' ? '❌ ' : '🌾 '),
+                                style: const TextStyle(fontSize: 10),
+                              ),
+                              Text(
+                                l.allergyTestStatus == 'passed'
+                                    ? '알러지 통과'
+                                    : (l.allergyTestStatus == 'caution' ? '알러지 주의' : '알러지 반응 기록'),
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: l.allergyTestStatus == 'passed'
+                                      ? const Color(0xFF15803D)
+                                      : (l.allergyTestStatus == 'caution' ? const Color(0xFFBE123C) : const Color(0xFFB45309)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                     if (l.isPlanned) ...[
                       const SizedBox(width: 6),
                       InkWell(
