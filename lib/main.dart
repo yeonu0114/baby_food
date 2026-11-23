@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'notification_service.dart';
 
 enum BabyGender {
   boy('남아', '👦', Color(0xFF4DABF7), Color(0xFFE7F5FF), Color(0xFFF8FAFC), Color(0xFF1864AB)),
@@ -55,7 +56,11 @@ Color get appLightAccentColor => AppThemeController.instance.lightAccentColor;
 Color get appBgColor => AppThemeController.instance.backgroundColor;
 Color get appTextColor => AppThemeController.instance.appbarTextColor;
 
-void main() => runApp(const BabyFoodApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await NotificationService.instance.init();
+  runApp(const BabyFoodApp());
+}
 
 class BabyFoodApp extends StatelessWidget {
   const BabyFoodApp({super.key});
@@ -792,6 +797,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     AppThemeController.instance.setGender(_gender);
 
     setState(() => _isLoading = false);
+    NotificationService.instance.syncScheduledNotifications(
+      cubes: _cubes,
+      mealLogs: _mealLogs,
+      prefs: prefs,
+    );
   }
 
   bool _isAlertReaction(String text) {
@@ -914,6 +924,26 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     if (_birthDate != null) await prefs.setString('baby_birth_date', _birthDate!.toIso8601String());
     if (_weaningStartDate != null) await prefs.setString('weaning_start_date', _weaningStartDate!.toIso8601String());
     await prefs.setString('baby_gender', _gender.code);
+
+    await NotificationService.instance.syncScheduledNotifications(
+      cubes: _cubes,
+      mealLogs: _mealLogs,
+      prefs: prefs,
+    );
+  }
+
+  void _extendCubeExpiry(CubeItem cube, int addDays) {
+    setState(() {
+      cube.expireDate = cube.expireDate.add(Duration(days: addDays));
+    });
+    _saveData();
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('✅ [${cube.displayName}] 소비기한이 +$addDays일 연장되었습니다.'),
+        backgroundColor: const Color(0xFFD97706),
+      ),
+    );
   }
 
   void _handleDiscardOrDeleteCube(CubeItem targetCube, {required bool isDiscardOnly}) {
@@ -1067,6 +1097,183 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     return '생후 ${daysFromBirth}일 · $stage (D+$weaningDays)';
   }
 
+  Future<void> _showNotificationSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    bool pushEnabled = prefs.getBool('push_enabled') ?? true;
+    bool pushLowStock = prefs.getBool('push_low_stock') ?? true;
+    bool pushExpiry = prefs.getBool('push_expiry') ?? true;
+    int pushHour = prefs.getInt('push_hour') ?? 9;
+    int pushMinute = prefs.getInt('push_minute') ?? 0;
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+          titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+          contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8F5E9),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.notifications_active_rounded, color: Color(0xFF2E7D32), size: 22),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text('스마트 푸시 알림 설정', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('🔔 푸시 알림 수신', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          const SizedBox(height: 2),
+                          Text(
+                            pushEnabled ? '매일 지정된 시간에 스마트 알림' : '알림 수신 끄기',
+                            style: const TextStyle(fontSize: 11, color: Color(0xFF64748B)),
+                          ),
+                        ],
+                      ),
+                      Switch(
+                        value: pushEnabled,
+                        activeColor: appPrimaryColor,
+                        onChanged: (val) {
+                          setDState(() => pushEnabled = val);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (pushEnabled) ...[
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.schedule_rounded, color: Color(0xFF475569)),
+                    title: const Text('정기 알림 시간', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                    subtitle: Text(
+                      '${pushHour.toString().padLeft(2, '0')}:${pushMinute.toString().padLeft(2, '0')} (하루 1회 요약 알림)',
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                    trailing: OutlinedButton(
+                      child: const Text('시간 변경'),
+                      onPressed: () async {
+                        final time = await showTimePicker(
+                          context: context,
+                          initialTime: TimeOfDay(hour: pushHour, minute: pushMinute),
+                        );
+                        if (time != null) {
+                          setDState(() {
+                            pushHour = time.hour;
+                            pushMinute = time.minute;
+                          });
+                        }
+                      },
+                    ),
+                  ),
+                  const Divider(),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    activeColor: appPrimaryColor,
+                    title: const Text('📦 잔여 큐브 3개 이하 알림', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+                    subtitle: const Text('보유 큐브가 3개 이하로 줄어들면 제작 알림', style: TextStyle(fontSize: 11)),
+                    value: pushLowStock,
+                    onChanged: (val) => setDState(() => pushLowStock = val ?? true),
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    activeColor: appPrimaryColor,
+                    title: const Text('⏳ 소비기한 D-1 임박 알림', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+                    subtitle: const Text('냉동 큐브 만료 1일 전 자동 경고', style: TextStyle(fontSize: 11)),
+                    value: pushExpiry,
+                    onChanged: (val) => setDState(() => pushExpiry = val ?? true),
+                  ),
+                  const Divider(),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.send_rounded, size: 16),
+                      label: const Text('📲 지금 테스트 알림 보내기 (작동 확인)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: appPrimaryColor,
+                        side: BorderSide(color: appPrimaryColor.withOpacity(0.5)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                      onPressed: () async {
+                        await NotificationService.instance.sendTestNotification();
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('🔔 상단 바에 테스트 푸시 알림을 발송했습니다!')),
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('취소', style: TextStyle(color: Color(0xFF64748B))),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: appPrimaryColor,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () async {
+                await prefs.setBool('push_enabled', pushEnabled);
+                await prefs.setBool('push_low_stock', pushLowStock);
+                await prefs.setBool('push_expiry', pushExpiry);
+                await prefs.setInt('push_hour', pushHour);
+                await prefs.setInt('push_minute', pushMinute);
+
+                await NotificationService.instance.syncScheduledNotifications(
+                  cubes: _cubes,
+                  mealLogs: _mealLogs,
+                  prefs: prefs,
+                );
+
+                if (ctx.mounted) Navigator.pop(ctx);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('🔔 푸시 알림 설정이 저장되었습니다.')),
+                  );
+                }
+              },
+              child: const Text('저장'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showSettings() {
     DateTime b = _birthDate ?? DateTime.now();
     DateTime w = _weaningStartDate ?? DateTime.now();
@@ -1212,6 +1419,27 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                     onPressed: () async {
                       final p = await showDatePicker(context: context, initialDate: w, firstDate: DateTime(2020), lastDate: DateTime.now().add(const Duration(days: 30)));
                       if (p != null) setDState(() => w = p);
+                    },
+                  ),
+                ),
+                const Divider(),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEF3C7),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.notifications_active_rounded, color: Color(0xFFD97706), size: 18),
+                  ),
+                  title: const Text('스마트 푸시 알림 설정', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                  subtitle: const Text('재고 소진(3개 이하) 및 기한 임박 알림', style: TextStyle(fontSize: 11)),
+                  trailing: OutlinedButton(
+                    child: const Text('설정'),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _showNotificationSettings();
                     },
                   ),
                 ),
@@ -1668,20 +1896,40 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                         ),
                       ],
                     ),
-                    InkWell(
-                      onTap: _showSettings,
-                      borderRadius: BorderRadius.circular(17),
-                      child: Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
+                    Row(
+                      children: [
+                        InkWell(
+                          onTap: _showNotificationSettings,
                           borderRadius: BorderRadius.circular(17),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                          child: Container(
+                            width: 34,
+                            height: 34,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(17),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            alignment: Alignment.center,
+                            child: const Icon(Icons.notifications_none_rounded, size: 19, color: Color(0xFF64748B)),
+                          ),
                         ),
-                        alignment: Alignment.center,
-                        child: const Icon(Icons.settings_outlined, size: 18, color: Color(0xFF64748B)),
-                      ),
+                        const SizedBox(width: 8),
+                        InkWell(
+                          onTap: _showSettings,
+                          borderRadius: BorderRadius.circular(17),
+                          child: Container(
+                            width: 34,
+                            height: 34,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(17),
+                              border: Border.all(color: const Color(0xFFE2E8F0)),
+                            ),
+                            alignment: Alignment.center,
+                            child: const Icon(Icons.settings_outlined, size: 18, color: Color(0xFF64748B)),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -1792,6 +2040,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               },
               onDiscardCube: (c) => _handleDiscardOrDeleteCube(c, isDiscardOnly: true),
               onDeleteCube: (c) => _handleDiscardOrDeleteCube(c, isDiscardOnly: false),
+              onExtendCube: _extendCubeExpiry,
               onRestock: (c, w, q, md, sl, subOpt) {
                 setState(() {
                   final baseName = getCanonicalBaseIngredient(c.name);
@@ -4766,6 +5015,7 @@ class CubeStorageHubTab extends StatefulWidget {
   final Function(CubeItem, String, FoodCategory, int, int, DateTime, int, String) onEditCube;
   final Function(CubeItem) onDiscardCube;
   final Function(CubeItem) onDeleteCube;
+  final Function(CubeItem, int) onExtendCube;
   final Function(CubeItem, int, int, DateTime, int, String) onRestock;
   final Function(CubeItem, String, FoodCategory, int, String)? onEditPlannedTopping;
   final Function(CubeItem)? onDeletePlannedTopping;
@@ -4780,6 +5030,7 @@ class CubeStorageHubTab extends StatefulWidget {
     required this.onEditCube,
     required this.onDiscardCube,
     required this.onDeleteCube,
+    required this.onExtendCube,
     required this.onRestock,
     this.onEditPlannedTopping,
     this.onDeletePlannedTopping,
@@ -4932,6 +5183,7 @@ class _CubeStorageHubTabState extends State<CubeStorageHubTab> {
                 onEditCube: widget.onEditCube,
                 onDiscardCube: widget.onDiscardCube,
                 onDeleteCube: widget.onDeleteCube,
+                onExtendCube: widget.onExtendCube,
               ),
               RestockPlanTab(
                 cubes: widget.cubes,
@@ -4960,6 +5212,7 @@ class CubeStockTab extends StatefulWidget {
   final Function(CubeItem, String, FoodCategory, int, int, DateTime, int, String) onEditCube;
   final Function(CubeItem) onDiscardCube;
   final Function(CubeItem) onDeleteCube;
+  final Function(CubeItem, int) onExtendCube;
 
   const CubeStockTab({
     super.key,
@@ -4972,6 +5225,7 @@ class CubeStockTab extends StatefulWidget {
     required this.onEditCube,
     required this.onDiscardCube,
     required this.onDeleteCube,
+    required this.onExtendCube,
   });
 
   @override
@@ -5245,7 +5499,270 @@ class _CubeStockTabState extends State<CubeStockTab> {
     );
   }
 
+  MealLog? _getUpcomingMealIn3Days(CubeItem c) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final limit = today.add(const Duration(days: 4));
+    for (final m in widget.mealLogs) {
+      final mDate = DateTime(m.time.year, m.time.month, m.time.day);
+      if (mDate.isAfter(today.subtract(const Duration(days: 1))) && mDate.isBefore(limit)) {
+        final matchId = m.cubeUsage.containsKey(c.id);
+        final baseC = getCanonicalBaseIngredient(c.name);
+        final matchName = m.ingredients.any((ing) {
+          final baseIng = getCanonicalBaseIngredient(ing);
+          return ing.contains(c.name) || c.name.contains(ing) || (baseC.isNotEmpty && baseC == baseIng);
+        });
+        if (matchId || matchName) {
+          return m;
+        }
+      }
+    }
+    return null;
+  }
+
+  void _showSafeDiscardDialog(CubeItem c) {
+    final daysSinceMade = DateTime.now().difference(c.madeDate).inDays;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+        contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFEBEE),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.warning_amber_rounded, color: Color(0xFFE53935), size: 22),
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text('안전 폐기 권장 가이드', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFFC62828))),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF1F2),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFFECDD3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${getFoodEmoji(c.name)} [${c.displayName}] 보관 기간: ${daysSinceMade}일 경과',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF9F1239)),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '제조일: ${c.madeDate.month}월 ${c.madeDate.day}일 · 잔여 수량: ${c.quantity}개',
+                    style: const TextStyle(fontSize: 11, color: Color(0xFFBE123C)),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              '소아청소년과 이유식 안전 지침에 따르면 영유아 냉동 큐브는 세균 번식 및 수분·영양 손실 방지를 위해 최대 14일 이내 소비가 원칙입니다.',
+              style: TextStyle(fontSize: 12, color: Color(0xFF334155), height: 1.4),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '기준일을 초과한 큐브는 아기의 소화기 건강을 위해 더 이상 기한을 연장하지 않고 즉시 폐기를 권장합니다.',
+              style: TextStyle(fontSize: 11.5, color: Color(0xFFE53935), fontWeight: FontWeight.w600, height: 1.3),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('💡 ', style: TextStyle(fontSize: 12)),
+                  Expanded(
+                    child: Text(
+                      '폐기 시 수량이 0개로 정리되며, [제작 필요] 탭에 자동 등록되어 신선한 큐브를 새로 만들 수 있도록 유도합니다.',
+                      style: TextStyle(fontSize: 11, color: Color(0xFF64748B), height: 1.3),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('닫기', style: TextStyle(color: Color(0xFF64748B))),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFE11D48),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            ),
+            icon: const Icon(Icons.delete_sweep_rounded, size: 16),
+            label: const Text('안전 폐기 후 [제작 필요] 등록', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+            onPressed: () {
+              Navigator.pop(ctx);
+              widget.onDiscardCube(c);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showExtensionDialog(CubeItem c, MealLog? upcomingMeal) {
+    final currentExp = c.expireDate;
+    final extendedExp = currentExp.add(const Duration(days: 3));
+    final daysSinceMade = DateTime.now().difference(c.madeDate).inDays;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+        contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF3C7),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.hourglass_top_rounded, color: Color(0xFFD97706), size: 22),
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text('소비기한 연장 신청 (+3일)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFF92400E))),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (upcomingMeal != null) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0FDF4),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFBBF7D0)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 16),
+                        const SizedBox(width: 6),
+                        const Text('식단 계획 확인 완료', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF166534))),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '• 현재 기한: ${currentExp.month}월 ${currentExp.day}일 (${c.dDayText})',
+                      style: const TextStyle(fontSize: 11.5, color: Color(0xFF334155)),
+                    ),
+                    Text(
+                      '• 연장 후 기한: ${extendedExp.month}월 ${extendedExp.day}일 (+3일 연장)',
+                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF15803D)),
+                    ),
+                    Text(
+                      '• 식단 연계: ${upcomingMeal.time.month}월 ${upcomingMeal.time.day}일 (${upcomingMeal.mealType.label}) 예정',
+                      style: const TextStyle(fontSize: 11.5, color: Color(0xFF15803D)),
+                    ),
+                  ],
+                ),
+              ),
+            ] else ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFBEB),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFFDE68A)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('ℹ️ 예정된 식단 안내', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF92400E))),
+                    const SizedBox(height: 4),
+                    const Text(
+                      '3일 이내에 배정된 식단이 없으나, 급여 계획이 있으신 경우 기한을 +3일 연장할 수 있습니다.',
+                      style: TextStyle(fontSize: 11.5, color: Color(0xFF78350F)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Text(
+                '💡 현재 보관일: ${daysSinceMade}일째 (소아과 권장 14일 초과 시 안전 폐기 안내가 제공됩니다)',
+                style: const TextStyle(fontSize: 11, color: Color(0xFF64748B), height: 1.3),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('취소', style: TextStyle(color: Color(0xFF64748B))),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFD97706),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            ),
+            icon: const Icon(Icons.update_rounded, size: 16),
+            label: const Text('+3일 안심 기한 연장하기', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+            onPressed: () {
+              Navigator.pop(ctx);
+              widget.onExtendCube(c, 3);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showCubeOptionDialog(CubeItem c) {
+    final now = DateTime.now();
+    final daysSinceMade = now.difference(c.madeDate).inDays;
+    final isOver14Days = daysSinceMade >= 14;
+    final upcomingMeal = _getUpcomingMealIn3Days(c);
+
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
@@ -5265,10 +5782,46 @@ class _CubeStockTabState extends State<CubeStockTab> {
                 children: [
                   Text(getFoodEmoji(c.name), style: const TextStyle(fontSize: 22)),
                   const SizedBox(width: 8),
-                  Text('${c.displayName} 관리', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('${c.displayName} 관리', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                        Text('제조: ${c.madeDate.month}월 ${c.madeDate.day}일 (${daysSinceMade}일 경과) · 기한: ${c.dDayText}',
+                            style: const TextStyle(fontSize: 11, color: Color(0xFF64748B))),
+                      ],
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 12),
+              if (c.quantity > 0 && !c.isPlannedOnly) ...[
+                if (isOver14Days)
+                  ListTile(
+                    leading: const Icon(Icons.warning_amber_rounded, color: Color(0xFFE53935)),
+                    title: const Text('소아과 기준 안전 폐기 안내', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFFE53935))),
+                    subtitle: const Text('14일 초과: 아기 건강을 위해 폐기 및 신규 제작 권장', style: TextStyle(fontSize: 11)),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _showSafeDiscardDialog(c);
+                    },
+                  )
+                else
+                  ListTile(
+                    leading: const Icon(Icons.update_rounded, color: Color(0xFFD97706)),
+                    title: const Text('소비기한 +3일 안심 연장', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFFD97706))),
+                    subtitle: Text(
+                      upcomingMeal != null
+                          ? '${upcomingMeal.time.month}월 ${upcomingMeal.time.day}일 식단 계획 확인됨 (연장 가능)'
+                          : '예정 식단 연계 및 +3일 연장',
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _showExtensionDialog(c, upcomingMeal);
+                    },
+                  ),
+              ],
               ListTile(
                 leading: const Icon(Icons.edit_outlined, color: Color(0xFF475569)),
                 title: const Text('정보 수정', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
@@ -5303,11 +5856,14 @@ class _CubeStockTabState extends State<CubeStockTab> {
     );
   }
 
-  // 2열 트레이 그리드 카드 빌더 (ui_redesign_preview.html)
+  // 2열 트레이 그리드 카드 빌더
   Widget _buildCubeGridCard(CubeItem c) {
     final isUnownedOrDiscarded = c.isPlannedOnly || c.quantity == 0;
+    final daysSinceMade = DateTime.now().difference(c.madeDate).inDays;
+    final isOver14Days = !isUnownedOrDiscarded && daysSinceMade >= 14;
     final isExpiring = !isUnownedOrDiscarded && c.daysRemaining >= 0 && c.daysRemaining <= 3;
     final isLowStock = !isUnownedOrDiscarded && c.quantity <= 3;
+    final upcomingMeal = _getUpcomingMealIn3Days(c);
     final emoji = getFoodEmoji(c.name);
 
     final totalDots = (c.quantity > 6) ? c.quantity : 6;
@@ -5319,13 +5875,17 @@ class _CubeStockTabState extends State<CubeStockTab> {
       child: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: isExpiring ? const Color(0xFFFFF5F5) : (isLowStock ? const Color(0xFFFFFBEB) : Colors.white),
+          color: isOver14Days
+              ? const Color(0xFFFFF1F2)
+              : (isExpiring ? const Color(0xFFFFF5F5) : (isLowStock ? const Color(0xFFFFFBEB) : Colors.white)),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: isExpiring
-                ? const Color(0xFFFCA5A5)
-                : (isLowStock ? const Color(0xFFFDE68A) : const Color(0xFFE2E8F0)),
-            width: (isExpiring || isLowStock) ? 1.5 : 1.0,
+            color: isOver14Days
+                ? const Color(0xFFFDA4AF)
+                : (isExpiring
+                    ? const Color(0xFFFCA5A5)
+                    : (isLowStock ? const Color(0xFFFDE68A) : const Color(0xFFE2E8F0))),
+            width: (isOver14Days || isExpiring || isLowStock) ? 1.5 : 1.0,
           ),
           boxShadow: const [
             BoxShadow(color: Color(0x06000000), blurRadius: 4, offset: Offset(0, 1)),
@@ -5352,7 +5912,9 @@ class _CubeStockTabState extends State<CubeStockTab> {
                               style: TextStyle(
                                 fontSize: 12.5,
                                 fontWeight: FontWeight.w800,
-                                color: isExpiring ? const Color(0xFF7F1D1D) : const Color(0xFF0F172A),
+                                color: isOver14Days
+                                    ? const Color(0xFF9F1239)
+                                    : (isExpiring ? const Color(0xFF7F1D1D) : const Color(0xFF0F172A)),
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -5360,7 +5922,20 @@ class _CubeStockTabState extends State<CubeStockTab> {
                         ],
                       ),
                     ),
-                    if (isExpiring)
+                    if (isOver14Days)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFE4E6),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFFFDA4AF)),
+                        ),
+                        child: const Text(
+                          '● 14일 초과',
+                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFFE11D48)),
+                        ),
+                      )
+                    else if (isExpiring)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
                         decoration: BoxDecoration(
@@ -5418,8 +5993,10 @@ class _CubeStockTabState extends State<CubeStockTab> {
                   '${c.unitWeight}g · ${c.dDayText}',
                   style: TextStyle(
                     fontSize: 10,
-                    color: isExpiring ? const Color(0xFFDC2626).withOpacity(0.85) : const Color(0xFF94A3B8),
-                    fontWeight: isExpiring ? FontWeight.w700 : FontWeight.normal,
+                    color: isOver14Days
+                        ? const Color(0xFFE11D48)
+                        : (isExpiring ? const Color(0xFFDC2626).withOpacity(0.85) : const Color(0xFF94A3B8)),
+                    fontWeight: (isOver14Days || isExpiring) ? FontWeight.w700 : FontWeight.normal,
                   ),
                 ),
               ],
@@ -5435,7 +6012,9 @@ class _CubeStockTabState extends State<CubeStockTab> {
                   margin: const EdgeInsets.only(right: 3),
                   decoration: BoxDecoration(
                     color: isFilled
-                        ? (isExpiring ? const Color(0xFFEF4444) : appPrimaryColor)
+                        ? (isOver14Days
+                            ? const Color(0xFFE11D48)
+                            : (isExpiring ? const Color(0xFFEF4444) : appPrimaryColor))
                         : const Color(0xFFE2E8F0),
                     borderRadius: BorderRadius.circular(2.5),
                   ),
@@ -5452,20 +6031,35 @@ class _CubeStockTabState extends State<CubeStockTab> {
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
-                    color: isExpiring ? const Color(0xFF991B1B) : const Color(0xFF0F172A),
+                    color: isOver14Days
+                        ? const Color(0xFF9F1239)
+                        : (isExpiring ? const Color(0xFF991B1B) : const Color(0xFF0F172A)),
                   ),
                 ),
-                if (isExpiring)
+                if (isOver14Days)
                   InkWell(
-                    onTap: () => _showCubeOptionDialog(c),
+                    onTap: () => _showSafeDiscardDialog(c),
                     borderRadius: BorderRadius.circular(6),
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFEF4444),
+                        color: const Color(0xFFE11D48),
                         borderRadius: BorderRadius.circular(6),
                       ),
-                      child: const Text('식단 추가', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white)),
+                      child: const Text('폐기 안내', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white)),
+                    ),
+                  )
+                else if (isExpiring)
+                  InkWell(
+                    onTap: () => _showExtensionDialog(c, upcomingMeal),
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFD97706),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text('⏳ 연장', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white)),
                     ),
                   )
                 else if (isUnownedOrDiscarded)
