@@ -203,7 +203,7 @@ const List<String> kMajorAllergenOptions = [
   '🥚 계란(난백)',
   '🥜 땅콩/견과',
   '🥛 우유/치즈',
-  '🫘 대두/두부',
+  '🫘 완두콩/대두/두부',
   '🐟 생선/새우',
   '🌱 참깨',
 ];
@@ -224,6 +224,10 @@ String getCanonicalBaseIngredient(String rawName) {
   s = s.replaceAll(RegExp(r'[\u{1F300}-\u{1F9FF}]', unicode: true), '').trim();
   // 3. g(그램), 개수 표기 제거: '10g (1개)'
   s = s.replaceAll(RegExp(r'\s*\d+g.*$'), '').trim();
+  s = s.replaceAll(RegExp(r'\s*\d+개.*$'), '').trim();
+
+  // 숫자나 단위만 남아 식재료명이 없는 경우 무효 처리
+  if (s.isEmpty || RegExp(r'^\d+').hasMatch(s)) return '';
 
   // 4. 이유식 대표 식재료 표준 그룹핑
   if (s.contains('쌀') || s.contains('배죽') || s == '진밥' || s.contains('미음')) return '쌀';
@@ -254,11 +258,12 @@ String getCanonicalBaseIngredient(String rawName) {
   if (s.contains('파프리카')) return '파프리카';
   if (s.contains('비타민')) return '비타민채';
   if (s.contains('콜리플라워')) return '콜리플라워';
-  if (s.contains('대두') || s.contains('콩')) return '대두';
+  if (s.contains('완두') || s.contains('대두') || s.contains('콩')) return '완두콩';
   if (s.contains('밀가루')) return '밀가루';
 
-  final firstWord = s.split(RegExp(r'\s+')).first;
-  return firstWord.isNotEmpty ? firstWord : s;
+  final firstWord = s.split(RegExp(r'\s+')).first.trim();
+  if (firstWord.isEmpty || RegExp(r'^\d+').hasMatch(firstWord)) return '';
+  return firstWord;
 }
 
 /// 영양학적 상극 궁합 모델
@@ -337,13 +342,13 @@ const List<NutritionalConflict> kNutritionalConflicts = [
     cookingNote: '시금치를 끓는 물에 살짝 데쳐 찬물에 헹구면 수산이 대부분 용출되므로, 데친 시금치를 두부와 함께 조리하시면 칼슘 손실 없이 안전합니다.',
   ),
   NutritionalConflict(
-    ingredient1: '대두',
+    ingredient1: '완두콩',
     ingredient2: '시금치',
-    title: '콩/대두 + 시금치',
+    title: '완두콩(콩류) + 시금치',
     reason: '시금치의 옥살산과 콩의 칼슘이 결합하여 칼슘 흡수율을 떨어뜨려요.',
     goodReplacementsFor1: ['애호박', '당근', '단호박'],
     recommendedNewIngredients: ['애호박'],
-    tip: '콩류는 애호박이나 당근과 함께 먹는 것이 좋아요.',
+    tip: '완두콩 등 콩류는 애호박이나 당근과 함께 먹는 것이 좋아요.',
     cookingNote: '시금치를 끓는 물에 데쳐 찬물에 헹군 후 꼭 짜서 조리하면 수산이 제거되어 안전하게 함께 섭취할 수 있습니다.',
   ),
   NutritionalConflict(
@@ -788,6 +793,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       _triedIngredients = (jsonDecode(ts) as List).map((i) => TriedIngredient.fromJson(i)).toList();
     }
 
+    _sanitizeAndMigrateData();
     _syncTriedIngredients();
     _consolidateTriedIngredients();
 
@@ -806,6 +812,124 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   bool _isAlertReaction(String text) {
     return text.contains('붉어짐') || text.contains('두드러기') || text.contains('발진') || text.contains('가려움') || text.contains('설사') || text.contains('뱉어냄');
+  }
+
+  /// 데이터 정제 및 마이그레이션:
+  /// 1) '대두' -> '완두콩' 단일화 (큐브, 식단, 먹어본 재료 전수 통합)
+  /// 2) 식재료명 없이 "10g 1개" 등으로 남은 유령/불완전 식재료 항목 전수 자동 정제
+  void _sanitizeAndMigrateData() {
+    bool changed = false;
+
+    // 1. _cubes 정제: 이름 빈 것 제거 및 '대두' -> '완두콩' 통합
+    final List<CubeItem> cleanCubes = [];
+    for (var c in _cubes) {
+      if (c.name.trim().isEmpty) {
+        changed = true;
+        continue;
+      }
+      if (c.name.trim() == '대두' || c.name.contains('대두')) {
+        c.name = c.name.replaceAll('대두', '완두콩');
+        changed = true;
+      }
+      final existingIdx = cleanCubes.indexWhere((item) =>
+          item.name == c.name &&
+          item.subOption == c.subOption &&
+          item.isPlannedOnly == c.isPlannedOnly);
+      if (existingIdx != -1) {
+        cleanCubes[existingIdx].quantity += c.quantity;
+        changed = true;
+      } else {
+        cleanCubes.add(c);
+      }
+    }
+    _cubes = cleanCubes;
+
+    // 2. _mealLogs 정제: 식재료명 없는 "10g 1개" 항목 제거 및 '대두' -> '완두콩' 통일
+    for (var m in _mealLogs) {
+      final List<String> cleanIngs = [];
+      for (var ing in m.ingredients) {
+        final trimmed = ing.trim();
+        final foodName = trimmed
+            .replaceAll(RegExp(r'\s*\d+g.*$'), '')
+            .replaceAll(RegExp(r'\s*\(\d+개\)'), '')
+            .replaceAll(RegExp(r'\s*\(\d+배죽\)'), '')
+            .replaceAll(RegExp(r'\s*\d+개'), '')
+            .trim();
+
+        // 식재료명 없이 '10g 1개' 등 숫자/단위만 남은 비정상 항목 삭제
+        if (foodName.isEmpty || RegExp(r'^\d+g').hasMatch(foodName) || RegExp(r'^\d+개').hasMatch(foodName)) {
+          changed = true;
+          continue;
+        }
+
+        String unified = ing;
+        if (unified.contains('대두')) {
+          unified = unified.replaceAll('대두', '완두콩');
+          changed = true;
+        }
+        cleanIngs.add(unified);
+      }
+
+      if (cleanIngs.length != m.ingredients.length) {
+        m.ingredients = cleanIngs;
+        changed = true;
+        int newTotal = 0;
+        for (var ing in m.ingredients) {
+          final mG = RegExp(r'(\d+)g').firstMatch(ing);
+          if (mG != null) newTotal += int.tryParse(mG.group(1)!) ?? 0;
+        }
+        m.totalGrams = newTotal;
+      } else {
+        m.ingredients = cleanIngs;
+      }
+
+      // 유효하지 않은 cubeUsage ID 제거
+      final Map<String, int> cleanUsage = {};
+      m.cubeUsage.forEach((cubeId, count) {
+        final hasCube = _cubes.any((c) => c.id == cubeId && c.name.trim().isNotEmpty);
+        if (hasCube && count > 0) {
+          cleanUsage[cubeId] = count;
+        } else {
+          changed = true;
+        }
+      });
+      m.cubeUsage = cleanUsage;
+
+      if (m.allergyTestItem != null && m.allergyTestItem!.contains('대두')) {
+        m.allergyTestItem = m.allergyTestItem!.replaceAll('대두', '완두콩');
+        changed = true;
+      }
+    }
+
+    // 3. _triedIngredients 정제
+    final List<TriedIngredient> cleanTried = [];
+    for (var t in _triedIngredients) {
+      if (t.name.trim().isEmpty) {
+        changed = true;
+        continue;
+      }
+      if (t.name.trim() == '대두' || t.name.contains('대두')) {
+        t.name = t.name.replaceAll('대두', '완두콩');
+        changed = true;
+      }
+      final existingIdx = cleanTried.indexWhere((item) =>
+          item.name == t.name || getCanonicalBaseIngredient(item.name) == getCanonicalBaseIngredient(t.name));
+      if (existingIdx != -1) {
+        for (var opt in t.subOptions) {
+          if (!cleanTried[existingIdx].subOptions.contains(opt)) {
+            cleanTried[existingIdx].subOptions.add(opt);
+          }
+        }
+        changed = true;
+      } else {
+        cleanTried.add(t);
+      }
+    }
+    _triedIngredients = cleanTried;
+
+    if (changed) {
+      _saveData();
+    }
   }
 
   void _consolidateTriedIngredients() {
@@ -960,6 +1084,25 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         targetCube.quantity = 0;
       } else {
         _cubes.removeAt(deletedIndex);
+
+        // 큐브 삭제 시 예정된 식단에서도 해당 큐브 사용 및 재료 깔끔히 정리
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        for (var l in _mealLogs) {
+          final logDay = DateTime(l.time.year, l.time.month, l.time.day);
+          final isUpcoming = logDay.isAfter(today) || (logDay.isAtSameMomentAs(today) && l.isPlanned);
+          if (isUpcoming) {
+            l.cubeUsage.remove(targetCube.id);
+            l.ingredients.removeWhere((ing) => ing.contains(targetCube.name) || ing.trim().isEmpty);
+
+            int newTotal = 0;
+            for (var ing in l.ingredients) {
+              final m = RegExp(r'(\d+)g').firstMatch(ing);
+              if (m != null) newTotal += int.tryParse(m.group(1)!) ?? 0;
+            }
+            l.totalGrams = newTotal;
+          }
+        }
       }
     });
     _saveData();
@@ -1595,7 +1738,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                   await prefs.setString('baby_gender', _gender.code);
                   AppThemeController.instance.setGender(_gender);
                 }
+                _sanitizeAndMigrateData();
                 _syncTriedIngredients();
+                _consolidateTriedIngredients();
                 setState(() {});
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -3483,6 +3628,7 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
 
     for (var name in curMealIngredients) {
       final base = getCanonicalBaseIngredient(name);
+      if (base.isEmpty) continue;
       if (!pastBases.contains(base) && !news.contains(name)) {
         news.add(name);
       }
@@ -3667,9 +3813,11 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                     int newWeight = 0;
                     newUsage.forEach((id, cnt) {
                       final c = widget.cubes.firstWhere((item) => item.id == id, orElse: () => CubeItem(id: '', name: '', category: FoodCategory.etc, unitWeight: 10, quantity: 0, madeDate: DateTime.now(), expireDate: DateTime.now()));
-                      final w = c.unitWeight * cnt;
-                      newWeight += w;
-                      newIngs.add('${c.displayName} ${w}g ($cnt개)');
+                      if (c.name.trim().isNotEmpty && cnt > 0) {
+                        final w = c.unitWeight * cnt;
+                        newWeight += w;
+                        newIngs.add('${c.displayName} ${w}g ($cnt개)');
+                      }
                     });
 
                     widget.onEditMealFull(l, l.mealType, l.time, l.reaction, newWeight, newUsage, newIngs, l.allergyTestItem);
@@ -3691,7 +3839,12 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
     TimeOfDay currentTime = TimeOfDay(hour: log.time.hour, minute: log.time.minute);
     final reactionController = TextEditingController(text: log.reaction);
     final allergyController = TextEditingController(text: getAllergyTestItemFromMeal(log) ?? '');
-    final Map<String, int> editUsage = Map<String, int>.from(log.cubeUsage);
+    final Map<String, int> editUsage = {};
+    log.cubeUsage.forEach((cubeId, count) {
+      if (widget.cubes.any((c) => c.id == cubeId && c.name.trim().isNotEmpty) && count > 0) {
+        editUsage[cubeId] = count;
+      }
+    });
 
     showDialog(
       context: context,
@@ -3701,8 +3854,10 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
           List<String> editNames = [];
           editUsage.forEach((cubeId, count) {
             final c = widget.cubes.firstWhere((item) => item.id == cubeId, orElse: () => CubeItem(id: '', name: '', category: FoodCategory.etc, unitWeight: 10, quantity: 0, madeDate: DateTime.now(), expireDate: DateTime.now()));
-            computedGrams += count * c.unitWeight;
-            if (count > 0 && c.name.isNotEmpty) editNames.add(c.name);
+            if (c.name.trim().isNotEmpty && count > 0) {
+              computedGrams += count * c.unitWeight;
+              editNames.add(c.name);
+            }
           });
           final editConflict = checkNutritionalConflict(editNames);
 
@@ -3829,7 +3984,9 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                   editUsage.forEach((id, cnt) {
                     if (cnt > 0) {
                       final c = widget.cubes.firstWhere((item) => item.id == id, orElse: () => CubeItem(id: '', name: '', category: FoodCategory.etc, unitWeight: 10, quantity: 0, madeDate: DateTime.now(), expireDate: DateTime.now()));
-                      newIngs.add('${c.displayName} ${c.unitWeight * cnt}g ($cnt개)');
+                      if (c.name.trim().isNotEmpty) {
+                        newIngs.add('${c.displayName} ${c.unitWeight * cnt}g ($cnt개)');
+                      }
                     }
                   });
 
@@ -4704,7 +4861,17 @@ class _MealCalendarTabState extends State<MealCalendarTab> {
                   ),
                 ),
               ...l.ingredients
-                  .where((ing) => !ing.contains('알러지') && !ing.contains('알레르기'))
+                  .where((ing) {
+                    if (ing.contains('알러지') || ing.contains('알레르기')) return false;
+                    final trimmed = ing.trim();
+                    final foodPart = trimmed
+                        .replaceAll(RegExp(r'\s*\d+g.*$'), '')
+                        .replaceAll(RegExp(r'\s*\(\d+개\)'), '')
+                        .replaceAll(RegExp(r'\s*\(\d+배죽\)'), '')
+                        .replaceAll(RegExp(r'\s*\d+개'), '')
+                        .trim();
+                    return foodPart.isNotEmpty && !RegExp(r'^\d+g').hasMatch(foodPart) && !RegExp(r'^\d+개').hasMatch(foodPart);
+                  })
                   .map((ing) {
                 final cleanName = ing.split(' ').first.replaceAll(RegExp(r'\(.*\)'), '').trim();
                 final isNew = news.contains(cleanName);
